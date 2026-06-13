@@ -30,78 +30,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refresh() {
         ioQueue.async { [weak self] in
             let cfg = Config.load()
-            let providers = [ClaudeReader.read(config: cfg), CodexReader.read(config: cfg)]
+            let provider = CodexReader.read(config: cfg)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.config = cfg
-                self.updateTitle(providers)
-                self.statusItem.menu = self.buildMenu(providers)
+                self.updateTitle(provider)
+                self.statusItem.menu = self.buildMenu(provider)
             }
         }
     }
 
-    /// The provider shown in the menu bar: pinned one, or (auto) the most
-    /// recently used. The dropdown still lists every provider in full.
-    private func activeProvider(_ providers: [ProviderUsage]) -> ProviderUsage? {
-        let avail = providers.filter { $0.available }
-        guard !avail.isEmpty else { return nil }
-        switch config.menuBarMode {
-        case "claude": return avail.first { $0.short == "CC" } ?? avail.first
-        case "codex":  return avail.first { $0.short == "CX" } ?? avail.first
-        default:
-            return avail.max {
-                ($0.lastActivity ?? .distantPast) < ($1.lastActivity ?? .distantPast)
-            }
-        }
-    }
-
-    private func updateTitle(_ providers: [ProviderUsage]) {
+    private func updateTitle(_ p: ProviderUsage) {
         guard let button = statusItem.button else { return }
-        guard let active = activeProvider(providers) else {
-            button.attributedTitle = NSAttributedString(string: " ⚠︎", attributes: [
+        guard p.available else {
+            button.attributedTitle = NSAttributedString(string: "Codex ⚠︎", attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: NSColor.secondaryLabelColor])
             return
         }
-        let pct = active.headlinePercent ?? 0
-        let color: NSColor = active.headlinePercent == nil ? .labelColor
+        let pct = p.headlinePercent ?? 0
+        let color: NSColor = p.headlinePercent == nil ? .labelColor
             : pct >= 90 ? .systemRed : pct >= 75 ? .systemOrange : .labelColor
         button.attributedTitle = NSAttributedString(
-            string: "\(active.short) \(active.menuBarValue)", attributes: [
+            string: "\(p.short) \(p.menuBarValue)", attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: color])
     }
 
     // MARK: - menu
 
-    private func buildMenu(_ providers: [ProviderUsage]) -> NSMenu {
+    private func buildMenu(_ p: ProviderUsage) -> NSMenu {
         let menu = NSMenu()
-        let active = activeProvider(providers)
-        for p in providers {
-            let isActive = active?.short == p.short
-            let mark = isActive ? "  ● 活跃" : ""
-            menu.addItem(header(p.name + (p.available ? mark : "  (无数据)"), accent: isActive))
-            if let note = p.note { menu.addItem(sub("· \(note)", dim: true)) }
-            if p.available {
-                for w in p.windows { addWindowRows(menu, w) }
-            }
-            menu.addItem(.separator())
+        menu.addItem(header(p.name + (p.available ? "" : "  (无数据)")))
+        if let note = p.note { menu.addItem(sub("· \(note)", dim: true)) }
+        if p.available {
+            for w in p.windows { addWindowRows(menu, w) }
         }
-
-        // Menu-bar display mode (auto / pin one). Keeps the bar focused on one.
-        let modeItem = NSMenuItem(title: "菜单栏显示", action: nil, keyEquivalent: "")
-        let modeMenu = NSMenu()
-        for (mode, title) in [("auto", "自动（跟随最近使用）"),
-                              ("claude", "仅 Claude Code"),
-                              ("codex", "仅 Codex")] {
-            let mi = NSMenuItem(title: title, action: #selector(setMode(_:)), keyEquivalent: "")
-            mi.target = self
-            mi.representedObject = mode
-            mi.state = (config.menuBarMode == mode) ? .on : .off
-            modeMenu.addItem(mi)
-        }
-        modeItem.submenu = modeMenu
-        menu.addItem(modeItem)
         menu.addItem(.separator())
 
         menu.addItem(sub("更新于 \(timeString(Date()))", dim: true))
@@ -188,36 +152,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func manualRefresh() { refresh() }
-
-    @objc private func setMode(_ sender: NSMenuItem) {
-        guard let mode = sender.representedObject as? String else { return }
-        config.menuBarMode = mode
-        config.save()
-        refresh()
-    }
 }
 
 // Debug/verify mode: print parsed usage as text and exit (no GUI).
 if CommandLine.arguments.contains("--once") {
     let cfg = Config.load()
-    var t = Date()
-    let claude = ClaudeReader.read(config: cfg)
-    FileHandle.standardError.write("   [timing] ClaudeReader: \(String(format: "%.2f", -t.timeIntervalSinceNow))s\n".data(using: .utf8)!)
-    t = Date()
-    let codex = CodexReader.read(config: cfg)
-    FileHandle.standardError.write("   [timing] CodexReader: \(String(format: "%.2f", -t.timeIntervalSinceNow))s\n".data(using: .utf8)!)
-    let provs = [claude, codex]
-    let activeNow = provs.filter { $0.available }
-        .max { ($0.lastActivity ?? .distantPast) < ($1.lastActivity ?? .distantPast) }
-    print(">> menuBarMode=\(cfg.menuBarMode)  auto-active=\(activeNow?.name ?? "none")  bar=\"\(activeNow.map { "\($0.short) \($0.menuBarValue)" } ?? "⚠︎")\"")
-    for p in provs {
-        print("== \(p.name)  available=\(p.available)  lastActivity=\(p.lastActivity.map { "\($0)" } ?? "nil")  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
-        if let n = p.note { print("   note: \(n)") }
-        for w in p.windows {
-            let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
-            let reset = w.resetAt.map { "\($0.countdownString()) (\($0))" } ?? (w.rolling ? "rolling" : "n/a")
-            print("   - \(w.label): \(pct)  bar=\(w.pct.progressBar())  reset=\(reset)  detail=\(w.detail ?? "-")")
-        }
+    let p = CodexReader.read(config: cfg)
+    print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
+    if let n = p.note { print("   note: \(n)") }
+    for w in p.windows {
+        let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
+        let reset = w.resetAt.map { "\($0.countdownString()) (\($0))" } ?? (w.rolling ? "rolling" : "n/a")
+        print("   - \(w.label): \(pct)  bar=\(w.pct.progressBar())  reset=\(reset)  detail=\(w.detail ?? "-")")
     }
     exit(0)
 }
