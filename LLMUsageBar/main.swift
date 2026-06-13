@@ -157,7 +157,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // Debug/verify mode: print parsed usage as text and exit (no GUI).
 if CommandLine.arguments.contains("--once") {
     let cfg = Config.load()
-    let p = CodexReader.read(config: cfg)
+    // Optional: `--once <session.jsonl>` parses a specific file (for verification).
+    let override = CommandLine.arguments.dropFirst().first { $0.hasSuffix(".jsonl") }
+        .map { URL(fileURLWithPath: $0) }
+    let p = CodexReader.read(config: cfg, overrideFile: override)
     print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
     if let n = p.note { print("   note: \(n)") }
     for w in p.windows {

@@ -9,8 +9,8 @@ enum CodexReader {
     static let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex/sessions", isDirectory: true)
 
-    static func read(config: Config) -> ProviderUsage {
-        guard let file = newestSessionFile() else {
+    static func read(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
+        guard let file = overrideFile ?? newestSessionFile() else {
             return ProviderUsage(name: "Codex", short: "CX", available: false,
                                  windows: [], note: "未找到 ~/.codex/sessions 数据")
         }
