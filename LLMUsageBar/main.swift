@@ -8,15 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.isVisible = true
-        if let button = statusItem.button {
-            // Always-visible glyph so the item is findable even before the first
-            // refresh and even if the text gets clipped near the notch.
-            button.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent",
-                                   accessibilityDescription: "LLM Usage")
-                ?? NSImage(systemSymbolName: "gauge", accessibilityDescription: "LLM Usage")
-            button.imagePosition = .imageLeading
-            button.title = " …"
-        }
+        statusItem.button?.title = "…"  // text-only, no icon — saves menu-bar space
         refresh()
         scheduleTimer()
     }
