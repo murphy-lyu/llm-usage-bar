@@ -16,15 +16,28 @@ Mac 菜单栏小工具，监测 **Claude Code** 和 **Codex** 的额度使用情
 
 ## 构建 & 运行
 
-```bash
-swift build                 # 调试构建
-./.build/debug/LLMUsageBar  # 直接跑（菜单栏出现图标）
-./.build/debug/LLMUsageBar --once   # 文本模式：打印当前数字后退出，用于排查
+这是标准的 **Xcode App 工程**。
 
-./build-app.sh              # 生成 LLMUsageBar.app（后台运行、无 Dock 图标）
-open LLMUsageBar.app
-cp -r LLMUsageBar.app /Applications/   # 安装
+```bash
+open LLMUsageBar.xcodeproj   # 用 Xcode 打开，点 ▶︎ 构建运行（菜单栏出现仪表盘图标）
 ```
+
+在 Xcode 里：选中 target → **Signing & Capabilities** 选你的 Team（本地运行用默认的 "Sign to Run Locally" 即可），然后 ⌘R 运行、⌘B 构建。打包分发用 **Product → Archive**。
+
+也可命令行构建：
+
+```bash
+xcodebuild -project LLMUsageBar.xcodeproj -scheme LLMUsageBar -configuration Release build
+# 产物在 ~/Library/Developer/Xcode/DerivedData/.../Build/Products/Release/LLMUsageBar.app
+```
+
+排查数字用文本模式（不弹菜单栏，打印后退出）：
+
+```bash
+/path/to/LLMUsageBar.app/Contents/MacOS/LLMUsageBar --once
+```
+
+> 工程文件由 [XcodeGen](https://github.com/yonsm/XcodeGen) 从 `project.yml` 生成（已 commit，clone 后可直接打开）。改了源文件增删后用 `xcodegen generate` 重新生成 `.xcodeproj`。
 
 退出：点菜单栏图标 → 退出（⌘Q）。
 

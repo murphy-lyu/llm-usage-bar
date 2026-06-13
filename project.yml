@@ -1,0 +1,37 @@
+# XcodeGen spec. Regenerate the .xcodeproj with:  xcodegen generate
+name: LLMUsageBar
+options:
+  bundleIdPrefix: local.llmusagebar
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_LANGUAGE: en
+
+targets:
+  LLMUsageBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: LLMUsageBar
+    settings:
+      base:
+        PRODUCT_NAME: LLMUsageBar
+        PRODUCT_BUNDLE_IDENTIFIER: local.llmusagebar
+        INFOPLIST_FILE: LLMUsageBar/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        # Menu-bar utility reads ~/.claude and ~/.codex, so it must stay
+        # OUT of the App Sandbox. (Distribute via Developer ID, not the App Store.)
+        ENABLE_APP_SANDBOX: NO
+        CODE_SIGN_STYLE: Automatic
+        # No team is committed; pick yours in Xcode > Signing & Capabilities.
+        DEVELOPMENT_TEAM: ""
