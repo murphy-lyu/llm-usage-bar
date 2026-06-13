@@ -4,11 +4,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var config = Config.load()
+    /// Serial so overlapping refreshes never race on the readers' file cache.
+    private let ioQueue = DispatchQueue(label: "llmusagebar.io", qos: .utility)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.isVisible = true
         statusItem.button?.title = "…"  // text-only, no icon — saves menu-bar space
+        let placeholder = NSMenu(); placeholder.addItem(sub("读取中…", dim: true))
+        statusItem.menu = placeholder
         refresh()
         scheduleTimer()
     }
@@ -21,11 +25,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - refresh
 
+    /// Reads all data on a background queue and only touches the UI on main —
+    /// file I/O must never block the main thread, or the menu lags on click.
     private func refresh() {
-        config = Config.load()
-        let providers = [ClaudeReader.read(config: config), CodexReader.read(config: config)]
-        updateTitle(providers)
-        statusItem.menu = buildMenu(providers)
+        ioQueue.async { [weak self] in
+            let cfg = Config.load()
+            let providers = [ClaudeReader.read(config: cfg), CodexReader.read(config: cfg)]
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.config = cfg
+                self.updateTitle(providers)
+                self.statusItem.menu = self.buildMenu(providers)
+            }
+        }
     }
 
     /// The provider shown in the menu bar: pinned one, or (auto) the most
@@ -174,7 +186,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // Debug/verify mode: print parsed usage as text and exit (no GUI).
 if CommandLine.arguments.contains("--once") {
     let cfg = Config.load()
-    let provs = [ClaudeReader.read(config: cfg), CodexReader.read(config: cfg)]
+    var t = Date()
+    let claude = ClaudeReader.read(config: cfg)
+    FileHandle.standardError.write("   [timing] ClaudeReader: \(String(format: "%.2f", -t.timeIntervalSinceNow))s\n".data(using: .utf8)!)
+    t = Date()
+    let codex = CodexReader.read(config: cfg)
+    FileHandle.standardError.write("   [timing] CodexReader: \(String(format: "%.2f", -t.timeIntervalSinceNow))s\n".data(using: .utf8)!)
+    let provs = [claude, codex]
     let activeNow = provs.filter { $0.available }
         .max { ($0.lastActivity ?? .distantPast) < ($1.lastActivity ?? .distantPast) }
     print(">> menuBarMode=\(cfg.menuBarMode)  auto-active=\(activeNow?.name ?? "none")  bar=\"\(activeNow.map { "\($0.short) \($0.menuBarValue)" } ?? "⚠︎")\"")

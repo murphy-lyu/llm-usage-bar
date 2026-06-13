@@ -5,6 +5,12 @@ import Foundation
 /// aggregate token counts locally and divide by configurable budgets.
 enum ClaudeReader {
     struct Entry { let time: Date; let tokens: Double }
+    /// Raw per-message token components, before weighting. Cached per file so a
+    /// weight change doesn't invalidate the cache.
+    struct RawEntry { let time: Date; let input, output, cacheCreate, cacheRead: Double }
+
+    private struct FileCache { let mtime: Date; let entries: [RawEntry] }
+    private static var cache: [String: FileCache] = [:]
 
     static let projectsDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/projects", isDirectory: true)
@@ -49,6 +55,8 @@ enum ClaudeReader {
 
     // MARK: - parsing
 
+    private static let pInput = Data("\"input_tokens\":".utf8)
+
     private static func loadEntries(config: Config) -> [Entry] {
         guard let projects = try? FileManager.default.contentsOfDirectory(
             at: projectsDir, includingPropertiesForKeys: nil) else { return [] }
@@ -61,34 +69,81 @@ enum ClaudeReader {
         }
         // Only files touched in the last 8 days matter for 5h + weekly windows.
         let cutoff = Date().addingTimeInterval(-8 * 86400)
-        var entries: [Entry] = []
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let isoNoFrac = ISO8601DateFormatter()
-        isoNoFrac.formatOptions = [.withInternetDateTime]
+        var raws: [RawEntry] = []
+        var livePaths = Set<String>()
 
         for file in files {
             let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
             if mod < cutoff { continue }
-            guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
-            for line in content.split(separator: "\n") {
-                guard line.contains("\"usage\""),
-                      let data = line.data(using: .utf8),
-                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let ts = obj["timestamp"] as? String,
-                      let msg = obj["message"] as? [String: Any],
-                      let usage = msg["usage"] as? [String: Any] else { continue }
-                let time = iso.date(from: ts) ?? isoNoFrac.date(from: ts)
-                guard let time, time >= cutoff else { continue }
-                let tokens = num(usage["input_tokens"]) * config.claudeWeightInput
-                    + num(usage["output_tokens"]) * config.claudeWeightOutput
-                    + num(usage["cache_creation_input_tokens"]) * config.claudeWeightCacheCreation
-                    + num(usage["cache_read_input_tokens"]) * config.claudeWeightCacheRead
-                if tokens > 0 { entries.append(Entry(time: time, tokens: tokens)) }
+            let path = file.path
+            livePaths.insert(path)
+            // Reuse cached parse if the file hasn't changed since last refresh —
+            // historical transcripts (tens of MB) are then parsed only once.
+            if let c = cache[path], c.mtime == mod {
+                raws += c.entries
+            } else {
+                let parsed = parseFile(file)
+                cache[path] = FileCache(mtime: mod, entries: parsed)
+                raws += parsed
             }
         }
-        return entries.sorted { $0.time < $1.time }
+        // Drop cache entries for files that rolled out of the window.
+        cache.keys.filter { !livePaths.contains($0) }.forEach { cache.removeValue(forKey: $0) }
+
+        return raws
+            .filter { $0.time >= cutoff }
+            .map { Entry(time: $0.time, tokens:
+                $0.input * config.claudeWeightInput
+                + $0.output * config.claudeWeightOutput
+                + $0.cacheCreate * config.claudeWeightCacheCreation
+                + $0.cacheRead * config.claudeWeightCacheRead) }
+            .filter { $0.tokens > 0 }
+            .sorted { $0.time < $1.time }
+    }
+
+    /// Parse one transcript by scanning raw UTF-8 bytes. Swift `String` search is
+    /// Unicode-aware and far too slow on multi-MB files, so we split on newline
+    /// bytes and only decode the few lines that actually carry token usage.
+    private static func parseFile(_ file: URL) -> [RawEntry] {
+        guard let data = try? Data(contentsOf: file) else { return [] }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoNoFrac = ISO8601DateFormatter()
+        isoNoFrac.formatOptions = [.withInternetDateTime]
+        var out: [RawEntry] = []
+        for slice in data.split(separator: 0x0A, omittingEmptySubsequences: true) {
+            guard slice.range(of: pInput) != nil else { continue }  // byte search — fast
+            let line = Substring(String(decoding: slice, as: UTF8.self))
+            guard let ts = scanString(line, "\"timestamp\":\""),
+                  let time = iso.date(from: ts) ?? isoNoFrac.date(from: ts) else { continue }
+            // First occurrence of each key is the top-level usage value
+            // (later duplicates live inside "iterations").
+            out.append(RawEntry(
+                time: time,
+                input: scanInt(line, "\"input_tokens\":"),
+                output: scanInt(line, "\"output_tokens\":"),
+                cacheCreate: scanInt(line, "\"cache_creation_input_tokens\":"),
+                cacheRead: scanInt(line, "\"cache_read_input_tokens\":")))
+        }
+        return out
+    }
+
+    /// Integer value following the first occurrence of `key` (e.g. `"output_tokens":`).
+    private static func scanInt(_ line: Substring, _ key: String) -> Double {
+        guard let r = line.range(of: key) else { return 0 }
+        var i = r.upperBound
+        while i < line.endIndex, !(line[i].isNumber || line[i] == "-") { i = line.index(after: i) }
+        var j = i
+        while j < line.endIndex, line[j].isNumber { j = line.index(after: j) }
+        return i < j ? (Double(line[i..<j]) ?? 0) : 0
+    }
+
+    /// String value after `key` (which must end at the opening quote), up to the next quote.
+    private static func scanString(_ line: Substring, _ key: String) -> String? {
+        guard let r = line.range(of: key) else { return nil }
+        guard let end = line[r.upperBound...].firstIndex(of: "\"") else { return nil }
+        return String(line[r.upperBound..<end])
     }
 
     private static func num(_ v: Any?) -> Double {

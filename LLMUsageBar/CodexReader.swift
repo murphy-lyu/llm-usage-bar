@@ -60,16 +60,28 @@ enum CodexReader {
         var timestamp: Date?
     }
 
+    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl. Descend to the
+    /// newest day directory and pick the newest file there, instead of walking
+    /// the entire tree (which can be thousands of files and stalls refresh).
     private static func newestSessionFile() -> URL? {
-        guard let en = FileManager.default.enumerator(
-            at: sessionsDir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
-        var best: (URL, Date)? = nil
-        for case let url as URL in en where url.pathExtension == "jsonl" {
-            let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            if best == nil || mod > best!.1 { best = (url, mod) }
+        let fm = FileManager.default
+        func newestChildDir(_ dir: URL) -> URL? {
+            guard let items = try? fm.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return nil }
+            return items
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+                .max { $0.lastPathComponent < $1.lastPathComponent }  // numeric names sort lexically
         }
-        return best?.0
+        func mtime(_ u: URL) -> Date {
+            (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+        }
+        guard let year = newestChildDir(sessionsDir),
+              let month = newestChildDir(year),
+              let day = newestChildDir(month),
+              let files = try? fm.contentsOfDirectory(
+                at: day, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
+        return files.filter { $0.pathExtension == "jsonl" }.max { mtime($0) < mtime($1) }
     }
 
     /// Last `token_count` event in the file (chronological => last line wins).
