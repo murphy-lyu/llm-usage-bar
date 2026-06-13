@@ -38,11 +38,18 @@ enum CodexReader {
                 detail: detail, rolling: true))
             return ProviderUsage(name: "Codex", short: "CX", available: true,
                                  windows: windows,
-                                 note: "当前供应商未返回官方额度（rate_limits 为空）")
+                                 note: "当前供应商未返回官方额度（rate_limits 为空）",
+                                 lastActivity: latest.timestamp)
         }
 
         return ProviderUsage(name: "Codex", short: "CX", available: true,
-                             windows: windows, note: nil)
+                             windows: windows, note: nil, lastActivity: latest.timestamp)
+    }
+
+    private static func isoDate(_ s: String) -> Date? {
+        let a = ISO8601DateFormatter(); a.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let b = ISO8601DateFormatter(); b.formatOptions = [.withInternetDateTime]
+        return a.date(from: s) ?? b.date(from: s)
     }
 
     // MARK: - helpers
@@ -50,6 +57,7 @@ enum CodexReader {
     private struct TokenInfo {
         var rateLimits: [String: Any]?
         var totalTokens: Double?
+        var timestamp: Date?
     }
 
     private static func newestSessionFile() -> URL? {
@@ -80,6 +88,7 @@ enum CodexReader {
                let total = i["total_token_usage"] as? [String: Any] {
                 info.totalTokens = num(total["total_tokens"])
             }
+            if let ts = obj["timestamp"] as? String { info.timestamp = isoDate(ts) }
             result = info // keep overwriting; last one is newest
         }
         return result

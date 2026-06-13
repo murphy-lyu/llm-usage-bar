@@ -44,7 +44,7 @@ enum ClaudeReader {
         }
 
         return ProviderUsage(name: "Claude Code", short: "CC", available: true,
-                             windows: windows, note: nil)
+                             windows: windows, note: nil, lastActivity: entries.last?.time)
     }
 
     // MARK: - parsing

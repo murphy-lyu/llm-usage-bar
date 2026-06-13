@@ -25,6 +25,10 @@ struct Config: Codable {
     var claudeWeeklyResetWeekday: Int? = nil
     var claudeWeeklyResetHour: Int? = nil
 
+    /// Which provider the menu bar shows: "auto" (the most recently used one),
+    /// "claude", or "codex". The dropdown always lists every provider in full.
+    var menuBarMode: String = "auto"
+
     /// How often to refresh, seconds.
     var refreshSeconds: Double = 60
 

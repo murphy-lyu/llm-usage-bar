@@ -19,6 +19,7 @@ struct ProviderUsage {
     var available: Bool        // did we find any data at all
     var windows: [UsageWindow]
     var note: String?          // e.g. data source path or a caveat
+    var lastActivity: Date?    // newest activity timestamp — drives "currently in use"
 
     /// The single most "urgent" percent — drives the menu bar. Windows with a
     /// real reset (5h, official limits) are preferred over rolling estimates so
@@ -27,6 +28,16 @@ struct ProviderUsage {
         let fixed = windows.filter { !$0.rolling }.compactMap { $0.percent }
         if let m = fixed.max() { return m }
         return windows.compactMap { $0.percent }.max()
+    }
+
+    /// Compact value for the menu bar: "88%" when we have a percent, else a
+    /// token count like "8.6M" so the bar is never blank, else "–".
+    var menuBarValue: String {
+        if let p = headlinePercent { return "\(Int(p.rounded()))%" }
+        if let d = windows.first(where: { $0.detail != nil })?.detail {
+            return d.replacingOccurrences(of: " tokens", with: "")
+        }
+        return "–"
     }
 }
 

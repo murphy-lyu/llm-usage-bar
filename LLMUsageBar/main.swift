@@ -36,39 +36,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = buildMenu(providers)
     }
 
-    private func updateTitle(_ providers: [ProviderUsage]) {
-        guard let button = statusItem.button else { return }
-        var parts: [String] = []
-        var worst = 0.0
-        for p in providers where p.available {
-            if let h = p.headlinePercent {
-                parts.append("\(p.short) \(Int(h.rounded()))%")
-                worst = max(worst, h)
-            } else {
-                parts.append("\(p.short) –")
+    /// The provider shown in the menu bar: pinned one, or (auto) the most
+    /// recently used. The dropdown still lists every provider in full.
+    private func activeProvider(_ providers: [ProviderUsage]) -> ProviderUsage? {
+        let avail = providers.filter { $0.available }
+        guard !avail.isEmpty else { return nil }
+        switch config.menuBarMode {
+        case "claude": return avail.first { $0.short == "CC" } ?? avail.first
+        case "codex":  return avail.first { $0.short == "CX" } ?? avail.first
+        default:
+            return avail.max {
+                ($0.lastActivity ?? .distantPast) < ($1.lastActivity ?? .distantPast)
             }
         }
-        let text = parts.isEmpty ? "LLM ⚠︎" : parts.joined(separator: "  ")
-        let color: NSColor = worst >= 90 ? .systemRed
-            : worst >= 75 ? .systemOrange : .labelColor
-        button.attributedTitle = NSAttributedString(string: text, attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: color
-        ])
+    }
+
+    private func updateTitle(_ providers: [ProviderUsage]) {
+        guard let button = statusItem.button else { return }
+        guard let active = activeProvider(providers) else {
+            button.attributedTitle = NSAttributedString(string: " ⚠︎", attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: NSColor.secondaryLabelColor])
+            return
+        }
+        let pct = active.headlinePercent ?? 0
+        let color: NSColor = active.headlinePercent == nil ? .labelColor
+            : pct >= 90 ? .systemRed : pct >= 75 ? .systemOrange : .labelColor
+        button.attributedTitle = NSAttributedString(
+            string: "\(active.short) \(active.menuBarValue)", attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: color])
     }
 
     // MARK: - menu
 
     private func buildMenu(_ providers: [ProviderUsage]) -> NSMenu {
         let menu = NSMenu()
+        let active = activeProvider(providers)
         for p in providers {
-            menu.addItem(header(p.name + (p.available ? "" : "  (无数据)")))
+            let isActive = active?.short == p.short
+            let mark = isActive ? "  ● 活跃" : ""
+            menu.addItem(header(p.name + (p.available ? mark : "  (无数据)"), accent: isActive))
             if let note = p.note { menu.addItem(sub("· \(note)", dim: true)) }
             if p.available {
                 for w in p.windows { addWindowRows(menu, w) }
             }
             menu.addItem(.separator())
         }
+
+        // Menu-bar display mode (auto / pin one). Keeps the bar focused on one.
+        let modeItem = NSMenuItem(title: "菜单栏显示", action: nil, keyEquivalent: "")
+        let modeMenu = NSMenu()
+        for (mode, title) in [("auto", "自动（跟随最近使用）"),
+                              ("claude", "仅 Claude Code"),
+                              ("codex", "仅 Codex")] {
+            let mi = NSMenuItem(title: title, action: #selector(setMode(_:)), keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = mode
+            mi.state = (config.menuBarMode == mode) ? .on : .off
+            modeMenu.addItem(mi)
+        }
+        modeItem.submenu = modeMenu
+        menu.addItem(modeItem)
+        menu.addItem(.separator())
 
         menu.addItem(sub("更新于 \(timeString(Date()))", dim: true))
         let edit = NSMenuItem(title: "校准额度 / 设置…", action: #selector(openConfig), keyEquivalent: ",")
@@ -110,10 +140,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item)
     }
 
-    private func header(_ s: String) -> NSMenuItem {
+    private func header(_ s: String, accent: Bool = false) -> NSMenuItem {
         let i = NSMenuItem()
         i.attributedTitle = NSAttributedString(string: s, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .bold)])
+            .font: NSFont.systemFont(ofSize: 13, weight: .bold),
+            .foregroundColor: accent ? NSColor.controlAccentColor : NSColor.labelColor])
         i.isEnabled = false
         return i
     }
@@ -139,13 +170,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func manualRefresh() { refresh() }
+
+    @objc private func setMode(_ sender: NSMenuItem) {
+        guard let mode = sender.representedObject as? String else { return }
+        config.menuBarMode = mode
+        config.save()
+        refresh()
+    }
 }
 
 // Debug/verify mode: print parsed usage as text and exit (no GUI).
 if CommandLine.arguments.contains("--once") {
     let cfg = Config.load()
-    for p in [ClaudeReader.read(config: cfg), CodexReader.read(config: cfg)] {
-        print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
+    let provs = [ClaudeReader.read(config: cfg), CodexReader.read(config: cfg)]
+    let activeNow = provs.filter { $0.available }
+        .max { ($0.lastActivity ?? .distantPast) < ($1.lastActivity ?? .distantPast) }
+    print(">> menuBarMode=\(cfg.menuBarMode)  auto-active=\(activeNow?.name ?? "none")  bar=\"\(activeNow.map { "\($0.short) \($0.menuBarValue)" } ?? "⚠︎")\"")
+    for p in provs {
+        print("== \(p.name)  available=\(p.available)  lastActivity=\(p.lastActivity.map { "\($0)" } ?? "nil")  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
         if let n = p.note { print("   note: \(n)") }
         for w in p.windows {
             let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
