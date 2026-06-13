@@ -6,11 +6,14 @@ import Foundation
 /// denominators used to turn local token counts into a percentage.
 struct Config: Codable {
     /// Token budget for Claude's 5-hour rolling session window (in *weighted*
-    /// tokens, see weights below). Calibrate against Claude Code's /usage.
-    var claudeFiveHourTokenBudget: Double = 20_000_000
+    /// tokens, see weights below). Default calibrated against an observed /usage
+    /// reading (official 23% at ~21.6M weighted). Recalibrate:
+    /// budget = your_weighted_tokens / (official_percent / 100).
+    var claudeFiveHourTokenBudget: Double = 94_000_000
 
     /// Token budget for Claude's weekly (7-day) window. 0 disables the weekly row.
-    var claudeWeeklyTokenBudget: Double = 500_000_000
+    /// Calibrated from an observed /usage reading (official 3% at ~383M weighted).
+    var claudeWeeklyTokenBudget: Double = 12_800_000_000
 
     /// Per-component token weights. cache_read is cheap (~0.1x) and otherwise
     /// dwarfs everything, so it is down-weighted by default. Tune to make the

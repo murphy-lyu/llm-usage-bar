@@ -24,19 +24,19 @@ enum ClaudeReader {
         let now = Date()
         var windows: [UsageWindow] = []
 
-        // ---- 5-hour rolling session block ----
+        // ---- 5-hour rolling session block (reset accurate, % is an estimate) ----
         if let block = activeFiveHourBlock(entries, now: now) {
             let pct = config.claudeFiveHourTokenBudget > 0
                 ? block.tokens / config.claudeFiveHourTokenBudget * 100 : nil
             windows.append(UsageWindow(
-                label: "5h 会话窗口",
+                label: "5 小时额度",
                 percent: pct,
                 resetAt: block.start.addingTimeInterval(5 * 3600),
-                detail: tokenStr(block.tokens)))
+                detail: tokenStr(block.tokens),  // not shown in menu; --once uses it for calibration
+                estimate: true))
         } else {
             windows.append(UsageWindow(
-                label: "5h 会话窗口", percent: 0, resetAt: nil,
-                detail: "当前空闲", rolling: false))
+                label: "5 小时额度", percent: 0, resetAt: nil, estimate: true))
         }
 
         // ---- Weekly (7-day) window ----
@@ -44,9 +44,10 @@ enum ClaudeReader {
             let (used, resetAt, rolling) = weeklyUsage(entries, now: now, config: config)
             let pct = used / config.claudeWeeklyTokenBudget * 100
             windows.append(UsageWindow(
-                label: rolling ? "7天滚动用量" : "周额度",
+                label: "周额度 · 所有模型",
                 percent: pct, resetAt: resetAt,
-                detail: tokenStr(used), rolling: rolling))
+                detail: tokenStr(used),  // not shown in menu; --once uses it for calibration
+                rolling: rolling, estimate: true))
         }
 
         return ProviderUsage(name: "Claude Code", short: "CC", available: true,

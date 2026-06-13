@@ -2,17 +2,19 @@
 
 Mac 菜单栏小工具，监测 **Claude Code** 和 **Codex** 的额度使用情况——不看「消耗了多少 token」，而看**周期内占比**和**距离下次重置还有多久**，免去每次点开客户端切 Tab。
 
-菜单栏长这样：`CC 69%  CX 16%`（点开看详情）。占比 ≥75% 变橙、≥90% 变红。
+菜单栏只显示**当下在用的那一个**（自动跟随最近活动），如 `CC 24%`。点开看两边详情。占比 ≥75% 变橙、≥90% 变红。展示格式对齐 Claude Code 的 `/usage`：`占比 % · 重置 2h`。
 
 ## 数据来源（全部本地读取，不联网）
 
 | 提供方 | 来源 | 占比 | 重置时间 |
 |--------|------|------|----------|
-| Claude Code | `~/.claude/projects/**/*.jsonl` 每条消息的 `usage` | **估算**（本地加权 token ÷ 可配置额度） | **精确**（5h 滚动窗口） |
+| Claude Code | `~/.claude/projects/**/*.jsonl` 每条消息的 `usage` | **估算**（本地加权 token ÷ 校准额度），标「估算」 | **精确**（5h 滚动窗口） |
 | Codex | `~/.codex/sessions/**/*.jsonl` 的 `token_count` 事件 | **官方精确**（`rate_limits.used_percent`） | **官方精确**（`resets_at`） |
 
-> Codex 直接读取客户端落盘的官方 `rate_limits`，零估算。
-> Claude 客户端**没有**把官方额度百分比写到本地，所以 Claude 的占比是基于「本地 token 聚合 ÷ 你填的额度上限」的估算——**5h 重置时间是准的，百分比需要校准**。
+> **为什么 Codex 是官方值、Claude 只能估算？**
+> Codex 客户端把官方 `rate_limits` 写进了本地会话文件，直接读即可，零估算。
+> Claude 客户端**不把**官方额度百分比写到本地——`/usage` 是运行时实时从 API 拉的。试过用 OAuth token 直连 `count_tokens` 读 `anthropic-ratelimit-*` 头，返回 `403 Request not allowed`：Anthropic **有意**只允许官方客户端使用该 token。因此 Claude 的占比只能本地估算，并明确标注「估算」；**5h/周的重置时间仍然准确**。
+> 校准后估算已相当接近官方（实测 5h 24% vs 官方 23%，周 3% vs 官方 3%）。
 
 ## 构建 & 运行
 
@@ -47,19 +49,24 @@ xcodebuild -project LLMUsageBar.xcodeproj -scheme LLMUsageBar -configuration Rel
 
 ```json
 {
-  "claudeFiveHourTokenBudget": 20000000,   // 5h 窗口的加权 token 额度（分母）
-  "claudeWeeklyTokenBudget": 500000000,    // 7天窗口额度，设 0 隐藏该行
+  "claudeFiveHourTokenBudget": 94000000,      // 5h 加权 token 额度（分母）
+  "claudeWeeklyTokenBudget": 12800000000,     // 周加权 token 额度，设 0 隐藏该行
   "claudeWeightInput": 1.0,
   "claudeWeightCacheCreation": 1.0,
-  "claudeWeightCacheRead": 0.1,            // 缓存读取量极大、单价低，默认降权
+  "claudeWeightCacheRead": 0.1,               // 缓存读取量极大、单价低，默认降权
   "claudeWeightOutput": 1.0,
+  "menuBarMode": "auto",                      // auto / claude / codex
   "refreshSeconds": 60
 }
 ```
 
-**怎么校准**：在 Claude Code 里跑 `/usage` 看官方显示的 5h 占比，对照本工具菜单里显示的「5h 窗口 token 数」，反推出额度填进 `claudeFiveHourTokenBudget`。例：官方显示 50%、此刻菜单显示 10M token，则额度 ≈ 20M。改完保存，下次刷新（≤60s）生效。
+默认额度已用一组实测 `/usage` 值校准过（官方 5h 23%、周 3%），开箱即大致对齐。若你的套餐不同想重新校准：
 
-`cache_read` 默认按 0.1 权重计入——它的量通常是其它部分的几十倍，全权重会把占比撑爆。
+> **额度 = 当前加权 token 数 ÷ (官方百分比 / 100)**
+
+在 Claude Code 跑 `/usage` 记下官方 5h %，临时把 `claudeWeightCacheRead` 设回 1 不需要——保持默认权重即可，用 `--once`（见下）看本工具当前的加权 token 数，套上面公式算出额度填回 `claudeFiveHourTokenBudget`。保存后 ≤60s 生效。
+
+`cache_read` 默认按 0.1 权重计入——它的量通常是其它部分的几十倍，全权重会把占比撑爆。这个权重不要随便改，改了上面的校准就得重来。
 
 ### 可选：给 Claude 周额度一个真实重置倒计时
 

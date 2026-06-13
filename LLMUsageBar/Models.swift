@@ -2,11 +2,12 @@ import Foundation
 
 /// One usage window we want to show in the menu bar (a 5h block, a weekly/30d limit, etc.)
 struct UsageWindow {
-    var label: String          // e.g. "5h 会话窗口", "30天额度"
+    var label: String          // e.g. "5 小时额度", "周额度 · 所有模型"
     var percent: Double?       // 0...100, nil if unknown
     var resetAt: Date?         // when this window resets, nil if rolling/unknown
-    var detail: String?        // extra small text, e.g. "1.2M tokens"
-    var rolling: Bool = false  // true => no hard reset, percent is "rolling usage"
+    var detail: String?        // extra small text (rarely shown)
+    var rolling: Bool = false  // true => no hard reset
+    var estimate: Bool = false // true => % is a local estimate, not official
 
     /// Percent clamped to 0...100 for display; falls back to 0.
     var pct: Double { max(0, min(100, percent ?? 0)) }
@@ -50,6 +51,15 @@ extension Date {
         if d > 0 { return "\(d)d \(h)h" }
         if h > 0 { return "\(h)h\(m)m" }
         return "\(m)m"
+    }
+
+    /// Coarse countdown matching Claude's /usage style: "2h" / "2d" / "8m".
+    func coarseCountdown(from now: Date = Date()) -> String {
+        let s = Int(self.timeIntervalSince(now))
+        if s <= 0 { return "现在" }
+        if s >= 86400 { return "\(Int((Double(s) / 86400).rounded()))d" }
+        if s >= 3600 { return "\(Int((Double(s) / 3600).rounded()))h" }
+        return "\(max(1, s / 60))m"
     }
 }
 

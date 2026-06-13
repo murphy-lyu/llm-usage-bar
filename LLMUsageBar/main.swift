@@ -122,44 +122,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         line.append(NSAttributedString(string: "  \(w.label)\n", attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium)]))
         let barColor: NSColor = w.pct >= 90 ? .systemRed : w.pct >= 75 ? .systemOrange : .systemGreen
-        line.append(NSAttributedString(string: "  \(bar) ", attributes: [
+        line.append(NSAttributedString(string: "  \(bar)  ", attributes: [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
             .foregroundColor: w.percent != nil ? barColor : NSColor.tertiaryLabelColor]))
         line.append(NSAttributedString(string: pctText, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)]))
 
+        // Match /usage: "· 重置 2h", and tag estimated numbers honestly.
         var tail: [String] = []
-        if let d = w.detail { tail.append(d) }
-        if w.rolling {
-            tail.append("滚动·无固定重置")
-        } else if let r = w.resetAt {
-            tail.append("重置 \(r.countdownString())")
-        }
+        if !w.rolling, let r = w.resetAt { tail.append("重置 \(r.coarseCountdown())") }
+        if w.estimate { tail.append("估算") }
+        else if w.rolling { tail.append("滚动") }
         if !tail.isEmpty {
             line.append(NSAttributedString(string: "   " + tail.joined(separator: " · "), attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: NSColor.secondaryLabelColor]))
+                .foregroundColor: w.estimate ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor]))
         }
-        let item = NSMenuItem(); item.attributedTitle = line; item.isEnabled = false
-        menu.addItem(item)
+        menu.addItem(displayRow(line, topPad: 5))
     }
 
     private func header(_ s: String, accent: Bool = false) -> NSMenuItem {
-        let i = NSMenuItem()
-        i.attributedTitle = NSAttributedString(string: s, attributes: [
+        displayRow(NSAttributedString(string: s, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .bold),
-            .foregroundColor: accent ? NSColor.controlAccentColor : NSColor.labelColor])
-        i.isEnabled = false
-        return i
+            .foregroundColor: accent ? NSColor.controlAccentColor : NSColor.labelColor]),
+            topPad: 7)
     }
 
     private func sub(_ s: String, dim: Bool = false) -> NSMenuItem {
-        let i = NSMenuItem()
-        i.attributedTitle = NSAttributedString(string: s, attributes: [
+        displayRow(NSAttributedString(string: s, attributes: [
             .font: NSFont.systemFont(ofSize: 11),
-            .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor])
-        i.isEnabled = false
-        return i
+            .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor]))
+    }
+
+    /// A non-interactive menu row rendered via a custom view, so its text keeps
+    /// full color instead of macOS's greyed-out "disabled" look, and it doesn't
+    /// highlight or dismiss the menu on click.
+    private func displayRow(_ attr: NSAttributedString, leftPad: CGFloat = 14, topPad: CGFloat = 3) -> NSMenuItem {
+        let field = NSTextField(labelWithAttributedString: attr)
+        field.isEditable = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.usesSingleLineMode = false
+        field.maximumNumberOfLines = 0
+        field.lineBreakMode = .byClipping
+        field.sizeToFit()
+        let size = field.fittingSize
+        let container = NSView(frame: NSRect(
+            x: 0, y: 0, width: ceil(size.width) + leftPad + 16, height: ceil(size.height) + topPad * 2))
+        field.frame = NSRect(x: leftPad, y: topPad, width: ceil(size.width), height: ceil(size.height))
+        container.addSubview(field)
+        let item = NSMenuItem()
+        item.view = container
+        return item
     }
 
     private func timeString(_ d: Date) -> String {
