@@ -1,0 +1,75 @@
+"action.quit" = "退出";
+"action.refresh" = "立即刷新";
+"action.cancel" = "取消";
+"action.save" = "保存";
+"action.settings" = "设置…";
+
+"alert.body" = "%@ 已接近上限。";
+"alert.title" = "Codex 用量已到 %d%%";
+
+"codex.detail.noOfficialLimits" = "无官方上限数据";
+"codex.note.rateLimitsEmpty" = "当前供应商未返回官方上限（rate_limits 为空）";
+"codex.note.sessionsMissing" = "未找到 ~/.codex/sessions 数据";
+"codex.note.tokenCountMissing" = "会话中暂无 token 用量事件";
+"codex.window.sessionUsage" = "本会话用量";
+
+"duration.days" = "%d 天";
+"duration.hours" = "%d 小时";
+"duration.minutes" = "%d 分钟";
+
+"limit.daily" = "每日上限";
+"limit.days" = "%d 天上限";
+"limit.fiveHour" = "5 小时上限";
+"limit.hours" = "%d 小时上限";
+"limit.minutes" = "%d 分钟上限";
+"limit.monthly" = "30 天上限";
+"limit.primary" = "主上限";
+"limit.secondary" = "次上限";
+"limit.weekly" = "每周上限";
+
+"menu.menuBarMode.title" = "显示内容";
+"menu.percentMode.title" = "显示方式";
+
+"about.versionBuild" = "版本 %@  构建 %@";
+
+"settings.about" = "关于";
+"settings.alertsDescription" = "用量跨过阈值时只提醒一次；用量回落后会重新允许提醒。";
+"settings.criticalThreshold" = "严重提醒";
+"settings.configFile" = "配置文件";
+"settings.general" = "通用";
+"settings.language" = "语言";
+"settings.languageFooter" = "重启应用后生效。";
+"settings.launchAtLogin" = "开机自动启动";
+"settings.menuBarDescription" = "选择菜单栏优先显示哪一个 Codex 上限。";
+"settings.menuBarMode" = "菜单栏数值";
+"settings.menuBarMode.fiveHour" = "5 小时上限";
+"settings.menuBarMode.highest" = "最高风险";
+"settings.menuBarMode.weekly" = "每周上限";
+"settings.percentMode" = "百分比含义";
+"settings.percentMode.remaining" = "剩余用量";
+"settings.percentMode.used" = "已用用量";
+"settings.refreshDescription" = "菜单栏刷新 Codex 用量的频率，修改后会自动保存。";
+"settings.refreshInterval" = "刷新间隔（秒）";
+"settings.restartButton" = "立即重启";
+"settings.restartMessage" = "请重启 Orb 以应用语言更改。";
+"settings.restartTitle" = "需要重启";
+"settings.section.alerts" = "提醒";
+"settings.section.language" = "语言";
+"settings.section.menuBar" = "菜单栏";
+"settings.section.refresh" = "刷新";
+"settings.section.startup" = "启动";
+"settings.showInFinder" = "在访达中显示";
+"settings.thresholdAlerts" = "用量阈值提醒";
+"settings.title" = "设置";
+"settings.warningThreshold" = "预警提醒";
+
+"status.estimated" = "估算";
+"status.loading" = "读取中…";
+"status.percentRemaining" = "剩余 %.0f%%";
+"status.percentUsed" = "已用 %.0f%%";
+"status.reset" = "重置 %@";
+"status.resetNow" = "现在重置";
+"status.rolling" = "滚动";
+"status.unavailable" = "（无数据）";
+"status.updatedAt" = "更新于 %@";
+"time.now" = "现在";

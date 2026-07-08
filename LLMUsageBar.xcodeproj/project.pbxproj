@@ -9,6 +9,11 @@
 /* Begin PBXBuildFile section */
 		93742D008CD98656CFCA0CD6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4125DA1966A22863D238E03B /* main.swift */; };
 		A1C9D3DB151B536353E39BDB /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BA1155464E28071341590C6 /* Config.swift */; };
+		B4A2E92265BB4EA4A3C62318 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = B4A2E91F65BB4EA4A3C62318 /* Localizable.strings */; };
+		B4A2E92665BB4EA4A3C62318 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = B4A2E92365BB4EA4A3C62318 /* Localizable.stringsdict */; };
+		B4A2E92765BB4EA4A3C62318 /* SettingsOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92865BB4EA4A3C62318 /* SettingsOpener.swift */; };
+		B4A2E92965BB4EA4A3C62318 /* SettingsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92A65BB4EA4A3C62318 /* SettingsWindowView.swift */; };
+		B4A2E92B65BB4EA4A3C62318 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92C65BB4EA4A3C62318 /* NotificationManager.swift */; };
 		F61F7A4C12796B239B876C9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E47D490B366870C7EDB09E7 /* Assets.xcassets */; };
 		F62E2597A93E2E972DA07E92 /* CodexReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B28710C1FBB59297894584F /* CodexReader.swift */; };
 		F65048FC73C20B8ACD70BA44 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D92F9AB294A9E97846C1D6 /* Models.swift */; };
@@ -20,6 +25,13 @@
 		5372A453B63A66CE36F7AEFF /* LLMUsageBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMUsageBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E47D490B366870C7EDB09E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8BA1155464E28071341590C6 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		B4A2E92065BB4EA4A3C62318 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B4A2E92165BB4EA4A3C62318 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		B4A2E92465BB4EA4A3C62318 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
+		B4A2E92565BB4EA4A3C62318 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.stringsdict; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.stringsdict"; sourceTree = "<group>"; };
+		B4A2E92865BB4EA4A3C62318 /* SettingsOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsOpener.swift; sourceTree = "<group>"; };
+		B4A2E92A65BB4EA4A3C62318 /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
+		B4A2E92C65BB4EA4A3C62318 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		D2D92F9AB294A9E97846C1D6 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		D5AB5546B9113C3681BF0CD9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -32,8 +44,13 @@
 				4B28710C1FBB59297894584F /* CodexReader.swift */,
 				8BA1155464E28071341590C6 /* Config.swift */,
 				D5AB5546B9113C3681BF0CD9 /* Info.plist */,
+				B4A2E91F65BB4EA4A3C62318 /* Localizable.strings */,
+				B4A2E92365BB4EA4A3C62318 /* Localizable.stringsdict */,
 				4125DA1966A22863D238E03B /* main.swift */,
 				D2D92F9AB294A9E97846C1D6 /* Models.swift */,
+				B4A2E92C65BB4EA4A3C62318 /* NotificationManager.swift */,
+				B4A2E92865BB4EA4A3C62318 /* SettingsOpener.swift */,
+				B4A2E92A65BB4EA4A3C62318 /* SettingsWindowView.swift */,
 			);
 			path = LLMUsageBar;
 			sourceTree = "<group>";
@@ -82,7 +99,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					5EF43DE3727B958B33AC3E39 = {
 						DevelopmentTeam = "";
@@ -96,6 +113,7 @@
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hans",
 			);
 			mainGroup = F03FA294BBE6EED99A794117;
 			minimizedProjectReferenceProxies = 1;
@@ -115,6 +133,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F61F7A4C12796B239B876C9E /* Assets.xcassets in Resources */,
+				B4A2E92265BB4EA4A3C62318 /* Localizable.strings in Resources */,
+				B4A2E92665BB4EA4A3C62318 /* Localizable.stringsdict in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,10 +149,34 @@
 				A1C9D3DB151B536353E39BDB /* Config.swift in Sources */,
 				F65048FC73C20B8ACD70BA44 /* Models.swift in Sources */,
 				93742D008CD98656CFCA0CD6 /* main.swift in Sources */,
+				B4A2E92765BB4EA4A3C62318 /* SettingsOpener.swift in Sources */,
+				B4A2E92965BB4EA4A3C62318 /* SettingsWindowView.swift in Sources */,
+				B4A2E92B65BB4EA4A3C62318 /* NotificationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		B4A2E91F65BB4EA4A3C62318 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B4A2E92065BB4EA4A3C62318 /* en */,
+				B4A2E92165BB4EA4A3C62318 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		B4A2E92365BB4EA4A3C62318 /* Localizable.stringsdict */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B4A2E92465BB4EA4A3C62318 /* en */,
+				B4A2E92565BB4EA4A3C62318 /* zh-Hans */,
+			);
+			name = Localizable.stringsdict;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		00642057AC293B58485BA56B /* Debug */ = {
@@ -142,6 +186,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -161,6 +206,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -192,10 +238,12 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -217,6 +265,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -227,6 +276,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -258,10 +308,12 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -276,6 +328,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -289,6 +342,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;

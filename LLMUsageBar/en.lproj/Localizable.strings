@@ -1,0 +1,75 @@
+"action.quit" = "Quit";
+"action.refresh" = "Refresh Now";
+"action.cancel" = "Cancel";
+"action.save" = "Save";
+"action.settings" = "Settings…";
+
+"alert.body" = "%@ is close to its limit.";
+"alert.title" = "Codex usage reached %d%%";
+
+"codex.detail.noOfficialLimits" = "No official limit data";
+"codex.note.rateLimitsEmpty" = "The current provider did not return official limits (rate_limits is empty)";
+"codex.note.sessionsMissing" = "No ~/.codex/sessions data found";
+"codex.note.tokenCountMissing" = "No token usage events in this session";
+"codex.window.sessionUsage" = "Current session usage";
+
+"duration.days" = "%d days";
+"duration.hours" = "%d hours";
+"duration.minutes" = "%d minutes";
+
+"limit.daily" = "Daily limit";
+"limit.days" = "%d-day limit";
+"limit.fiveHour" = "5-hour limit";
+"limit.hours" = "%d-hour limit";
+"limit.minutes" = "%d-minute limit";
+"limit.monthly" = "30-day limit";
+"limit.primary" = "Primary limit";
+"limit.secondary" = "Secondary limit";
+"limit.weekly" = "Weekly limit";
+
+"menu.menuBarMode.title" = "Limit";
+"menu.percentMode.title" = "Percentage";
+
+"about.versionBuild" = "Version %@  Build %@";
+
+"settings.about" = "About";
+"settings.alertsDescription" = "Notifications are sent once when a limit crosses the selected thresholds, then reset after usage drops.";
+"settings.criticalThreshold" = "Critical alert";
+"settings.configFile" = "Config file";
+"settings.general" = "General";
+"settings.language" = "Language";
+"settings.languageFooter" = "Restart the app to apply the selected language.";
+"settings.launchAtLogin" = "Launch at login";
+"settings.menuBarDescription" = "Choose which Codex limit appears in the menu bar.";
+"settings.menuBarMode" = "Menu bar value";
+"settings.menuBarMode.fiveHour" = "5-hour limit";
+"settings.menuBarMode.highest" = "Highest risk";
+"settings.menuBarMode.weekly" = "Weekly limit";
+"settings.percentMode" = "Percentage meaning";
+"settings.percentMode.remaining" = "Usage remaining";
+"settings.percentMode.used" = "Usage used";
+"settings.refreshDescription" = "How often the menu bar refreshes Codex usage. Changes are saved automatically.";
+"settings.refreshInterval" = "Refresh interval (seconds)";
+"settings.restartButton" = "Restart Now";
+"settings.restartMessage" = "Please restart Orb to apply the language change.";
+"settings.restartTitle" = "Restart Required";
+"settings.section.alerts" = "Alerts";
+"settings.section.language" = "Language";
+"settings.section.menuBar" = "Menu Bar";
+"settings.section.refresh" = "Refresh";
+"settings.section.startup" = "Startup";
+"settings.showInFinder" = "Show in Finder";
+"settings.thresholdAlerts" = "Usage threshold alerts";
+"settings.title" = "Settings";
+"settings.warningThreshold" = "Warning alert";
+
+"status.estimated" = "Estimated";
+"status.loading" = "Loading…";
+"status.percentRemaining" = "%.0f%% remaining";
+"status.percentUsed" = "%.0f%% used";
+"status.reset" = "Resets in %@";
+"status.resetNow" = "Resets now";
+"status.rolling" = "Rolling";
+"status.unavailable" = "(No Data)";
+"status.updatedAt" = "Updated %@";
+"time.now" = "Now";

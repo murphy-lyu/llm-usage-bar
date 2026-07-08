@@ -5,6 +5,51 @@ import Foundation
 struct Config: Codable {
     /// How often to refresh, seconds.
     var refreshSeconds: Double = 60
+    var menuBarDisplayMode: MenuBarDisplayMode = .fiveHour
+    var percentDisplayMode: PercentDisplayMode = .remaining
+    var thresholdAlertsEnabled: Bool = true
+    var warningThreshold: Double = 80
+    var criticalThreshold: Double = 95
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        refreshSeconds = try c.decodeIfPresent(Double.self, forKey: .refreshSeconds) ?? 60
+        menuBarDisplayMode = try c.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .fiveHour
+        percentDisplayMode = try c.decodeIfPresent(PercentDisplayMode.self, forKey: .percentDisplayMode) ?? .remaining
+        thresholdAlertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .thresholdAlertsEnabled) ?? true
+        warningThreshold = try c.decodeIfPresent(Double.self, forKey: .warningThreshold) ?? 80
+        criticalThreshold = try c.decodeIfPresent(Double.self, forKey: .criticalThreshold) ?? 95
+    }
+
+    enum MenuBarDisplayMode: String, Codable, CaseIterable, Identifiable {
+        case fiveHour
+        case weekly
+        case highest
+
+        var id: String { rawValue }
+        var titleKey: String {
+            switch self {
+            case .fiveHour: return "settings.menuBarMode.fiveHour"
+            case .weekly: return "settings.menuBarMode.weekly"
+            case .highest: return "settings.menuBarMode.highest"
+            }
+        }
+    }
+
+    enum PercentDisplayMode: String, Codable, CaseIterable, Identifiable {
+        case remaining
+        case used
+
+        var id: String { rawValue }
+        var titleKey: String {
+            switch self {
+            case .remaining: return "settings.percentMode.remaining"
+            case .used: return "settings.percentMode.used"
+            }
+        }
+    }
 
     static let path: URL = {
         let dir = FileManager.default.homeDirectoryForCurrentUser

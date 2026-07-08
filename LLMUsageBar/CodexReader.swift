@@ -10,40 +10,43 @@ enum CodexReader {
         .appendingPathComponent(".codex/sessions", isDirectory: true)
 
     static func read(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
-        guard let file = overrideFile ?? newestSessionFile() else {
+        guard let latest = overrideFile.flatMap({ latestTokenCount(in: $0, sourceFile: $0) }) ?? newestTokenCount() else {
             return ProviderUsage(name: "Codex", short: "CX", available: false,
-                                 windows: [], note: "未找到 ~/.codex/sessions 数据")
-        }
-        guard let latest = latestTokenCount(in: file) else {
-            return ProviderUsage(name: "Codex", short: "CX", available: false,
-                                 windows: [], note: "会话中暂无 token 用量事件")
+                                 windows: [], note: "codex.note.sessionsMissing".l10n)
         }
 
         var windows: [UsageWindow] = []
-        for (key, label) in [("primary", "主额度"), ("secondary", "次额度")] {
+        for (key, label) in [("primary", "limit.primary".l10n), ("secondary", "limit.secondary".l10n)] {
             guard let rl = latest.rateLimits?[key] as? [String: Any],
                   let pct = num(rl["used_percent"]) else { continue }
             let win = num(rl["window_minutes"])
             let reset = num(rl["resets_at"]).map { Date(timeIntervalSince1970: $0) }
             windows.append(UsageWindow(
+                kind: windowKind(minutes: win),
                 label: windowLabel(minutes: win, fallback: label),
                 percent: pct, resetAt: reset, detail: nil))
         }
+        let plan: String? = (latest.rateLimits?["plan_type"]).map { planName(valueString($0)) }
 
         if windows.isEmpty {
             // Provider didn't report limits — show local token total as a fallback.
-            let detail = latest.totalTokens.map { tokenStr($0) } ?? "无官方额度数据"
+            let detail = latest.totalTokens.map { tokenStr($0) } ?? "codex.detail.noOfficialLimits".l10n
             windows.append(UsageWindow(
-                label: "本会话用量", percent: nil, resetAt: nil,
+                kind: .session,
+                label: "codex.window.sessionUsage".l10n, percent: nil, resetAt: nil,
                 detail: detail, rolling: true))
             return ProviderUsage(name: "Codex", short: "CX", available: true,
                                  windows: windows,
-                                 note: "当前供应商未返回官方额度（rate_limits 为空）",
-                                 lastActivity: latest.timestamp)
+                                 note: "codex.note.rateLimitsEmpty".l10n,
+                                 lastActivity: latest.timestamp,
+                                 sourceFile: latest.sourceFile,
+                                 plan: plan)
         }
 
         return ProviderUsage(name: "Codex", short: "CX", available: true,
-                             windows: windows, note: nil, lastActivity: latest.timestamp)
+                             windows: windows, note: nil, lastActivity: latest.timestamp,
+                             sourceFile: latest.sourceFile,
+                             plan: plan)
     }
 
     private static func isoDate(_ s: String) -> Date? {
@@ -58,12 +61,19 @@ enum CodexReader {
         var rateLimits: [String: Any]?
         var totalTokens: Double?
         var timestamp: Date?
+        var sourceFile: URL?
     }
 
-    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl. Descend to the
-    /// newest day directory and pick the newest file there, instead of walking
-    /// the entire tree (which can be thousands of files and stalls refresh).
-    private static func newestSessionFile() -> URL? {
+    private static func newestTokenCount() -> TokenInfo? {
+        recentSessionFiles(limit: 12)
+            .compactMap { latestTokenCount(in: $0, sourceFile: $0) }
+            .max { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) }
+    }
+
+    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl. Scan only the newest
+    /// day and pick the newest token_count by event timestamp across recent files,
+    /// which avoids stale active sessions winning by file modification time.
+    private static func recentSessionFiles(limit: Int) -> [URL] {
         let fm = FileManager.default
         func newestChildDir(_ dir: URL) -> URL? {
             guard let items = try? fm.contentsOfDirectory(
@@ -80,12 +90,14 @@ enum CodexReader {
               let month = newestChildDir(year),
               let day = newestChildDir(month),
               let files = try? fm.contentsOfDirectory(
-                at: day, includingPropertiesForKeys: [.contentModificationDateKey]) else { return nil }
-        return files.filter { $0.pathExtension == "jsonl" }.max { mtime($0) < mtime($1) }
+                at: day, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
+        return Array(files.filter { $0.pathExtension == "jsonl" }
+            .sorted { mtime($0) > mtime($1) }
+            .prefix(limit))
     }
 
     /// Last `token_count` event in the file (chronological => last line wins).
-    private static func latestTokenCount(in file: URL) -> TokenInfo? {
+    private static func latestTokenCount(in file: URL, sourceFile: URL) -> TokenInfo? {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return nil }
         var result: TokenInfo? = nil
         for line in content.split(separator: "\n") {
@@ -101,22 +113,34 @@ enum CodexReader {
                 info.totalTokens = num(total["total_tokens"])
             }
             if let ts = obj["timestamp"] as? String { info.timestamp = isoDate(ts) }
+            info.sourceFile = sourceFile
             result = info // keep overwriting; last one is newest
         }
         return result
     }
 
+    private static func windowKind(minutes: Double?) -> UsageWindowKind {
+        guard let m = minutes else { return .custom }
+        switch Int(m) {
+        case 43200: return .monthly
+        case 10080: return .weekly
+        case 1440: return .daily
+        case 300: return .fiveHour
+        default: return .custom
+        }
+    }
+
     private static func windowLabel(minutes: Double?, fallback: String) -> String {
         guard let m = minutes, m > 0 else { return fallback }
         switch Int(m) {
-        case 43200: return "30天额度"
-        case 10080: return "周额度"
-        case 1440:  return "日额度"
-        case 300:   return "5h窗口"
+        case 43200: return "limit.monthly".l10n
+        case 10080: return "limit.weekly".l10n
+        case 1440:  return "limit.daily".l10n
+        case 300:   return "limit.fiveHour".l10n
         default:
-            if m >= 1440 { return "\(Int(m / 1440))天额度" }
-            if m >= 60 { return "\(Int(m / 60))h窗口" }
-            return "\(Int(m))分钟窗口"
+            if m >= 1440 { return String.localizedStringWithFormat("limit.days".l10n, Int(m / 1440)) }
+            if m >= 60 { return String.localizedStringWithFormat("limit.hours".l10n, Int(m / 60)) }
+            return String.localizedStringWithFormat("limit.minutes".l10n, Int(m))
         }
     }
 
@@ -125,6 +149,29 @@ enum CodexReader {
         if let i = v as? Int { return Double(i) }
         if let n = v as? NSNumber { return n.doubleValue }
         return nil
+    }
+
+
+    private static func valueString(_ v: Any) -> String {
+        if let s = v as? String { return s }
+        if let n = v as? NSNumber { return numberString(n.doubleValue) }
+        return String(describing: v)
+    }
+
+    private static func planName(_ s: String) -> String {
+        s.lowercased() == "plus" ? "Plus" : s.capitalized
+    }
+
+    private static func numberString(_ d: Double) -> String {
+        if d.rounded() == d { return String(Int(d)) }
+        return String(format: "%.1f", d)
+    }
+
+    private static func durationString(_ minutes: Double) -> String {
+        let m = Int(minutes)
+        if m % 1440 == 0 { return String.localizedStringWithFormat("duration.days".l10n, m / 1440) }
+        if m % 60 == 0 { return String.localizedStringWithFormat("duration.hours".l10n, m / 60) }
+        return String.localizedStringWithFormat("duration.minutes".l10n, m)
     }
 
     private static func tokenStr(_ t: Double) -> String {
