@@ -481,30 +481,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let pctText = w.percent != nil ? String(format: displayPercentFormat(), displayPct) : "—"
         let bar = w.percent != nil ? displayPct.progressBar() : "··········"
         let line = NSMutableAttributedString()
-
-        // Right tab stop shared by both lines, so the percentage (line 1) and
-        // the reset text (line 2) land at the same right edge. Leave a few
-        // points of margin short of the field's actual edge — landing
-        // exactly on it gets the trailing characters clipped by rounding.
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: fieldWidth - 6, options: [:])]
-
-        // Line 1: title, with the percentage right-aligned next to it.
-        let firstLineStart = line.length
-        line.append(NSAttributedString(string: "\(w.label)\t", attributes: [
+        line.append(NSAttributedString(string: "\(w.label)\n", attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium)]))
-        line.append(NSAttributedString(string: pctText, attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)]))
-        line.addAttribute(.paragraphStyle, value: paragraph,
-                          range: NSRange(location: firstLineStart, length: line.length - firstLineStart))
-        line.append(NSAttributedString(string: "\n", attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]))
-
-        // Line 2: progress bar, with the reset text right-aligned next to it.
-        let secondLineStart = line.length
         let barColor: NSColor = w.pct >= 90 ? .systemRed : w.pct >= 75 ? .systemOrange : .systemGreen
-        line.append(NSAttributedString(string: bar, attributes: [
+        let secondLineStart = line.length
+        line.append(NSAttributedString(string: "\(bar)  ", attributes: [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
             .foregroundColor: w.percent != nil ? barColor : NSColor.tertiaryLabelColor]))
+        line.append(NSAttributedString(string: pctText, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)]))
 
         // Match /usage-style reset text, and tag estimated numbers honestly.
         var tail: [String] = []
@@ -522,6 +507,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: w.estimate ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor]))
         }
+
+        // Pin the tail to the row's right edge with a right tab stop, instead
+        // of letting it trail the percentage text at whatever width that text
+        // happens to be (which drifted row to row). Leave a few points of
+        // margin short of the field's actual edge — landing exactly on it
+        // gets the trailing characters clipped by rounding.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: fieldWidth - 6, options: [:])]
         line.addAttribute(.paragraphStyle, value: paragraph,
                           range: NSRange(location: secondLineStart, length: line.length - secondLineStart))
         return line
