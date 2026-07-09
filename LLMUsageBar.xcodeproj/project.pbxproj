@@ -22,7 +22,7 @@
 /* Begin PBXFileReference section */
 		4125DA1966A22863D238E03B /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		4B28710C1FBB59297894584F /* CodexReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexReader.swift; sourceTree = "<group>"; };
-		5372A453B63A66CE36F7AEFF /* LLMUsageBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LLMUsageBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5372A453B63A66CE36F7AEFF /* Orb.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Orb.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E47D490B366870C7EDB09E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8BA1155464E28071341590C6 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		B4A2E92065BB4EA4A3C62318 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -66,7 +66,7 @@
 		F132E64241F2BD1F78CF312B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				5372A453B63A66CE36F7AEFF /* LLMUsageBar.app */,
+				5372A453B63A66CE36F7AEFF /* Orb.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,7 +89,7 @@
 			packageProductDependencies = (
 			);
 			productName = LLMUsageBar;
-			productReference = 5372A453B63A66CE36F7AEFF /* LLMUsageBar.app */;
+			productReference = 5372A453B63A66CE36F7AEFF /* Orb.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -197,7 +197,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = local.llmusagebar;
-				PRODUCT_NAME = LLMUsageBar;
+				PRODUCT_NAME = Orb;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -353,7 +353,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = local.llmusagebar;
-				PRODUCT_NAME = LLMUsageBar;
+				PRODUCT_NAME = Orb;
 				SDKROOT = macosx;
 			};
 			name = Release;

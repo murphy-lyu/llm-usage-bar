@@ -3,8 +3,9 @@ import Foundation
 /// Reads Codex session rollouts (~/.codex/sessions/YYYY/MM/DD/*.jsonl).
 /// Codex persists OFFICIAL rate limits in `token_count` events
 /// (rate_limits.primary/secondary = {used_percent, window_minutes, resets_at}),
-/// so we surface those directly — no estimation needed. When the provider
-/// returns null limits (custom/relay providers), we fall back to token totals.
+/// so we surface those directly. If a local record is older than its reset
+/// time and Codex has not written a newer token_count yet, we locally advance
+/// that window so the menu bar does not stay stuck overnight.
 enum CodexReader {
     static let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex/sessions", isDirectory: true)
@@ -21,10 +22,12 @@ enum CodexReader {
                   let pct = num(rl["used_percent"]) else { continue }
             let win = num(rl["window_minutes"])
             let reset = num(rl["resets_at"]).map { Date(timeIntervalSince1970: $0) }
-            windows.append(UsageWindow(
+            windows.append(normalizedWindow(UsageWindow(
                 kind: windowKind(minutes: win),
                 label: windowLabel(minutes: win, fallback: label),
-                percent: pct, resetAt: reset, detail: nil))
+                percent: pct, resetAt: reset, detail: nil),
+                windowMinutes: win,
+                tokenTimestamp: latest.timestamp))
         }
         let plan: String? = (latest.rateLimits?["plan_type"]).map { planName(valueString($0)) }
 
@@ -128,6 +131,34 @@ enum CodexReader {
         case 300: return .fiveHour
         default: return .custom
         }
+    }
+
+    private static func normalizedWindow(_ window: UsageWindow,
+                                         windowMinutes: Double?,
+                                         tokenTimestamp: Date?) -> UsageWindow {
+        guard let resetAt = window.resetAt,
+              let windowMinutes,
+              let tokenTimestamp,
+              windowMinutes > 0,
+              Date() >= resetAt,
+              tokenTimestamp < resetAt else {
+            return window
+        }
+
+        var normalized = window
+        normalized.percent = 0
+        normalized.resetAt = nextReset(after: resetAt, windowMinutes: windowMinutes)
+        normalized.estimate = true
+        return normalized
+    }
+
+    private static func nextReset(after resetAt: Date, windowMinutes: Double) -> Date {
+        var nextReset = resetAt
+        let interval = windowMinutes * 60
+        while Date() >= nextReset {
+            nextReset = nextReset.addingTimeInterval(interval)
+        }
+        return nextReset
     }
 
     private static func windowLabel(minutes: Double?, fallback: String) -> String {

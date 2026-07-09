@@ -132,20 +132,32 @@ private final class HeaderRowView: NSView {
 
         guard let plan else { return }
 
-        // The plan name sits right next to the title, rather than pushed to
+        // The plan badge sits right next to the title, rather than pushed to
         // the row's far right edge, so it reads as "Codex Plus" instead of an
         // unrelated value floating across the row.
+        let planBadge = NSView()
+        planBadge.wantsLayer = true
+        planBadge.layer?.cornerRadius = 4
+        planBadge.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.14).cgColor
+        planBadge.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(planBadge)
+
         let planLabel = NSTextField(labelWithString: plan)
-        planLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        planLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         planLabel.textColor = .controlAccentColor
         planLabel.lineBreakMode = .byTruncatingTail
         planLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(planLabel)
+        planBadge.addSubview(planLabel)
 
         NSLayoutConstraint.activate([
-            planLabel.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6),
-            planLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
-            planLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor)
+            planBadge.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 7),
+            planBadge.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            planBadge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            planBadge.heightAnchor.constraint(equalToConstant: 18),
+
+            planLabel.leadingAnchor.constraint(equalTo: planBadge.leadingAnchor, constant: 6),
+            planLabel.trailingAnchor.constraint(equalTo: planBadge.trailingAnchor, constant: -6),
+            planLabel.centerYAnchor.constraint(equalTo: planBadge.centerYAnchor)
         ])
     }
 
