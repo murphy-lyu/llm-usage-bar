@@ -5,7 +5,8 @@ struct GeneralSettingsTab: View {
     private let onChange: (Config) -> Void
     @State private var config: Config
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var appLanguage = (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first ?? "en"
+    @State private var appLanguage = GeneralSettingsTab.normalizedLanguage(
+        (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first)
     @State private var showRestartAlert = false
     @State private var refreshSecondsText: String
     @FocusState private var refreshFieldFocused: Bool
@@ -14,6 +15,15 @@ struct GeneralSettingsTab: View {
         ("en", "English"),
         ("zh-Hans", "简体中文")
     ]
+
+    /// macOS's AppleLanguages entries carry region/script suffixes (e.g.
+    /// "zh-Hans-CN", "en-US") that never exactly match our two supported
+    /// picker tags ("en", "zh-Hans"), which left the Picker showing no
+    /// selection. Match by leading language subtag instead.
+    private static func normalizedLanguage(_ raw: String?) -> String {
+        guard let raw else { return "en" }
+        return raw.hasPrefix("zh") ? "zh-Hans" : "en"
+    }
 
     init(config: Config, onChange: @escaping (Config) -> Void) {
         self.onChange = onChange
