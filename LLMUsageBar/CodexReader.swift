@@ -73,36 +73,54 @@ enum CodexReader {
             .max { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) }
     }
 
-    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl. Scan only the newest
-    /// day and pick the newest token_count by event timestamp across recent files,
-    /// which avoids stale active sessions winning by file modification time.
-    private static func recentSessionFiles(limit: Int) -> [URL] {
+    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl, filed under the day the
+    /// session *started*. A session that begins before midnight and keeps being
+    /// appended to after midnight still lives in yesterday's folder, so restricting
+    /// to only the single newest day-folder can miss the most recently active file.
+    /// We instead scan the newest few day-folders and pick globally by mtime.
+    private static func recentSessionFiles(limit: Int, dayFolders: Int = 3) -> [URL] {
         let fm = FileManager.default
-        func newestChildDir(_ dir: URL) -> URL? {
+        func childDirsDesc(_ dir: URL) -> [URL] {
             guard let items = try? fm.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return nil }
+                at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return [] }
             return items
                 .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-                .max { $0.lastPathComponent < $1.lastPathComponent }  // numeric names sort lexically
+                .sorted { $0.lastPathComponent > $1.lastPathComponent }  // numeric names sort lexically
         }
         func mtime(_ u: URL) -> Date {
             (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
         }
-        guard let year = newestChildDir(sessionsDir),
-              let month = newestChildDir(year),
-              let day = newestChildDir(month),
-              let files = try? fm.contentsOfDirectory(
-                at: day, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
-        return Array(files.filter { $0.pathExtension == "jsonl" }
-            .sorted { mtime($0) > mtime($1) }
-            .prefix(limit))
+
+        var dayDirs: [URL] = []
+        outer: for year in childDirsDesc(sessionsDir) {
+            for month in childDirsDesc(year) {
+                for day in childDirsDesc(month) {
+                    dayDirs.append(day)
+                    if dayDirs.count >= dayFolders { break outer }
+                }
+            }
+        }
+
+        let files = dayDirs.flatMap { day -> [URL] in
+            (try? fm.contentsOfDirectory(
+                at: day, includingPropertiesForKeys: [.contentModificationDateKey]))?
+                .filter { $0.pathExtension == "jsonl" } ?? []
+        }
+        return Array(files.sorted { mtime($0) > mtime($1) }.prefix(limit))
     }
 
-    /// Last `token_count` event in the file (chronological => last line wins).
+    /// Last `token_count` event in the file that carries usable rate limits
+    /// (chronological => last line wins). Codex occasionally emits a trailing
+    /// token_count with primary/secondary set to null (e.g. right after a limit
+    /// is hit, while it briefly reports a credits/premium structure instead) —
+    /// we don't want that to blank out the last known percent, so we prefer the
+    /// newest event that actually has primary/secondary data, falling back to
+    /// the newest event overall only if none do.
     private static func latestTokenCount(in file: URL, sourceFile: URL) -> TokenInfo? {
         guard let content = try? String(contentsOf: file, encoding: .utf8) else { return nil }
-        var result: TokenInfo? = nil
+        var anyResult: TokenInfo? = nil
+        var usableResult: TokenInfo? = nil
         for line in content.split(separator: "\n") {
             guard line.contains("\"token_count\""),
                   let data = line.data(using: .utf8),
@@ -117,9 +135,12 @@ enum CodexReader {
             }
             if let ts = obj["timestamp"] as? String { info.timestamp = isoDate(ts) }
             info.sourceFile = sourceFile
-            result = info // keep overwriting; last one is newest
+            anyResult = info // keep overwriting; last one is newest
+            let hasUsableLimits = (info.rateLimits?["primary"] as? [String: Any]) != nil
+                || (info.rateLimits?["secondary"] as? [String: Any]) != nil
+            if hasUsableLimits { usableResult = info }
         }
-        return result
+        return usableResult ?? anyResult
     }
 
     private static func windowKind(minutes: Double?) -> UsageWindowKind {
