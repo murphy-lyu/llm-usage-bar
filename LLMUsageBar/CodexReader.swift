@@ -29,7 +29,12 @@ enum CodexReader {
                 windowMinutes: win,
                 tokenTimestamp: latest.timestamp))
         }
-        let plan: String? = (latest.rateLimits?["plan_type"]).map { planName(valueString($0)) }
+        // Session files stopped reliably including plan_type in rate_limits; the
+        // ChatGPT plan is also embedded in the auth token, which doesn't go stale
+        // between session writes, so prefer that and fall back to the session data.
+        let planFromAuth = authPlanType()
+        let planFromSession = (latest.rateLimits?["plan_type"]).map { valueString($0) }
+        let plan: String? = (planFromAuth ?? planFromSession).map { planName($0) }
 
         if windows.isEmpty {
             // Provider didn't report limits — show local token total as a fallback.
@@ -50,6 +55,33 @@ enum CodexReader {
                              windows: windows, note: nil, lastActivity: latest.timestamp,
                              sourceFile: latest.sourceFile,
                              plan: plan)
+    }
+
+    /// The ChatGPT plan (e.g. "plus") is embedded as a claim in the id_token JWT
+    /// stored in ~/.codex/auth.json, under the "https://api.openai.com/auth"
+    /// namespace. We only need to base64url-decode the (unsigned-here) payload
+    /// segment, not verify the signature — we're just reading our own account's
+    /// locally-cached token, not trusting it for auth.
+    private static func authPlanType() -> String? {
+        let authFile = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/auth.json")
+        guard let data = try? Data(contentsOf: authFile),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tokens = obj["tokens"] as? [String: Any],
+              let idToken = tokens["id_token"] as? String else { return nil }
+
+        let segments = idToken.split(separator: ".")
+        guard segments.count >= 2 else { return nil }
+        var base64 = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+
+        guard let payloadData = Data(base64Encoded: base64),
+              let payload = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+              let authClaim = payload["https://api.openai.com/auth"] as? [String: Any],
+              let planType = authClaim["chatgpt_plan_type"] as? String else { return nil }
+        return planType
     }
 
     private static func isoDate(_ s: String) -> Date? {

@@ -808,7 +808,7 @@ if CommandLine.arguments.contains("--once") {
     let override = CommandLine.arguments.dropFirst().first { $0.hasSuffix(".jsonl") }
         .map { URL(fileURLWithPath: $0) }
     let p = CodexReader.read(config: cfg, overrideFile: override)
-    print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")")
+    print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")  plan=\(p.plan ?? "nil")")
     if let n = p.note { print("   note: \(n)") }
     for w in p.windows {
         let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
