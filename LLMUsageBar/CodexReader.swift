@@ -7,6 +7,11 @@ import Foundation
 /// time and Codex has not written a newer token_count yet, we locally advance
 /// that window so the menu bar does not stay stuck overnight.
 enum CodexReader {
+    /// A new Codex rollout commonly starts with one `token_count` whose
+    /// `rate_limits` is null. Give the session writer a short window to publish
+    /// the first complete event before treating the missing limits as real.
+    private static let initialRateLimitsGraceInterval: TimeInterval = 5 * 60
+
     static let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex/sessions", isDirectory: true)
 
@@ -100,9 +105,30 @@ enum CodexReader {
     }
 
     private static func newestTokenCount() -> TokenInfo? {
-        recentSessionFiles(limit: 12)
+        let candidates = recentSessionFiles(limit: 12)
             .compactMap { latestTokenCount(in: $0, sourceFile: $0) }
-            .max { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) }
+        guard let newest = candidates.max(by: isOlder) else { return nil }
+
+        // An empty first event in a newly-created rollout must not immediately
+        // blank the last official limits from another rollout. Keep the newest
+        // usable value only during a bounded grace period; a provider that truly
+        // never reports limits will still reach the normal token-total fallback.
+        guard !hasUsableLimits(newest),
+              let timestamp = newest.timestamp,
+              Date().timeIntervalSince(timestamp) >= 0,
+              Date().timeIntervalSince(timestamp) < initialRateLimitsGraceInterval else {
+            return newest
+        }
+        return candidates.filter(hasUsableLimits).max(by: isOlder) ?? newest
+    }
+
+    private static func isOlder(_ lhs: TokenInfo, _ rhs: TokenInfo) -> Bool {
+        (lhs.timestamp ?? .distantPast) < (rhs.timestamp ?? .distantPast)
+    }
+
+    private static func hasUsableLimits(_ info: TokenInfo) -> Bool {
+        (info.rateLimits?["primary"] as? [String: Any]) != nil
+            || (info.rateLimits?["secondary"] as? [String: Any]) != nil
     }
 
     /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl, filed under the day the
@@ -168,9 +194,7 @@ enum CodexReader {
             if let ts = obj["timestamp"] as? String { info.timestamp = isoDate(ts) }
             info.sourceFile = sourceFile
             anyResult = info // keep overwriting; last one is newest
-            let hasUsableLimits = (info.rateLimits?["primary"] as? [String: Any]) != nil
-                || (info.rateLimits?["secondary"] as? [String: Any]) != nil
-            if hasUsableLimits { usableResult = info }
+            if hasUsableLimits(info) { usableResult = info }
         }
         return usableResult ?? anyResult
     }
