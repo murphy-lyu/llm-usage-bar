@@ -67,7 +67,7 @@ private final class MenuValueRowView: NSView {
                 valueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -8)
             ])
         } else {
-            valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14).isActive = true
+            valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -27).isActive = true
         }
     }
 
@@ -283,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settingsOpener: SettingsOpener?
     private var sessionWatcher: DispatchSourceFileSystemObject?
     private var sessionWatcherFD: CInt = -1
-    private var watchedSessionDay: URL?
+    private var watchedSessionPath: URL?
     private var refreshDebounce: DispatchWorkItem?
     private var hasAlertBaseline = false
     private var lastPercents: [String: Double] = [:]
@@ -319,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refresh() {
         ioQueue.async { [weak self] in
             let cfg = Config.load()
-            let provider = CodexReader.read(config: cfg)
+            let provider = UsageProviderRegistry.adapter(for: cfg.providerID).read(config: cfg)
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.config = cfg
@@ -329,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let menu = self.buildMenu(provider)
                 menu.delegate = self
                 self.statusItem.menu = menu
-                self.scheduleSessionWatcher()
+                self.scheduleSessionWatcher(for: provider.sourceFile)
             }
         }
     }
@@ -337,17 +337,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateTitle(_ p: ProviderUsage) {
         guard let button = statusItem.button else { return }
         guard p.available else {
-            button.attributedTitle = NSAttributedString(string: "Codex ⚠︎", attributes: [
+            button.attributedTitle = NSAttributedString(string: "\(p.name) ⚠︎", attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: NSColor.secondaryLabelColor])
             return
         }
-        let selected = p.window(for: config.menuBarDisplayMode)
+        let mode = p.effectiveDisplayMode(for: config.menuBarDisplayMode)
+        let selected = p.window(for: mode)
         let pct = selected?.percent ?? p.headlinePercent ?? 0
         let color: NSColor = selected?.percent == nil && p.headlinePercent == nil ? .labelColor
             : pct >= 90 ? .systemRed : pct >= 75 ? .systemOrange : .labelColor
         button.attributedTitle = NSAttributedString(
-            string: "\(p.short) \(p.menuBarValue(for: config.menuBarDisplayMode, percentMode: config.percentDisplayMode))", attributes: [
+            string: p.menuBarValue(for: mode, percentMode: config.percentDisplayMode), attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: color])
     }
@@ -364,7 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(usageWindowPickerItem(p.windows, width: menuWidth))
             menu.addItem(.separator())
             menu.addItem(percentModeRowItem(width: menuWidth))
-            menu.addItem(menuBarModeRowItem(width: menuWidth))
+            menu.addItem(menuBarModeRowItem(width: menuWidth, provider: p))
         }
         menu.addItem(.separator())
 
@@ -396,13 +397,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         300
     }
 
-    private func menuBarModeRowItem(width: CGFloat) -> NSMenuItem {
+    private func menuBarModeRowItem(width: CGFloat, provider: ProviderUsage? = nil) -> NSMenuItem {
         let title = "menu.menuBarMode.title".l10n
-        let value = currentMenuBarWindowLabel()
+        let value = currentMenuBarWindowLabel(provider: provider)
         let item = NSMenuItem(title: menuRowTitle(title, value), action: nil, keyEquivalent: "")
         item.view = MenuValueRowView(title: title, value: value, width: width)
         item.identifier = NSUserInterfaceItemIdentifier("menuBarMode")
-        item.submenu = menuBarModeMenu()
+        item.submenu = menuBarModeMenu(provider: provider)
         return item
     }
 
@@ -416,36 +417,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    private func menuBarModeMenu() -> NSMenu {
+    private func menuBarModeMenu(provider: ProviderUsage? = nil) -> NSMenu {
         let submenu = NSMenu()
-        let fiveHour = NSMenuItem(
-            title: Config.MenuBarDisplayMode.fiveHour.titleKey.l10n,
-            action: #selector(selectMenuBarFiveHour),
-            keyEquivalent: ""
-        )
-        fiveHour.target = self
-        fiveHour.state = config.menuBarDisplayMode == .fiveHour ? .on : .off
-
-        let weekly = NSMenuItem(
-            title: Config.MenuBarDisplayMode.weekly.titleKey.l10n,
-            action: #selector(selectMenuBarWeekly),
-            keyEquivalent: ""
-        )
-        weekly.target = self
-        weekly.state = config.menuBarDisplayMode == .weekly ? .on : .off
-
-        let highest = NSMenuItem(
-            title: Config.MenuBarDisplayMode.highest.titleKey.l10n,
-            action: #selector(selectMenuBarHighest),
-            keyEquivalent: ""
-        )
-        highest.target = self
-        highest.state = config.menuBarDisplayMode == .highest ? .on : .off
-
-        submenu.addItem(fiveHour)
-        submenu.addItem(weekly)
-        submenu.addItem(highest)
+        let modes = provider?.availableDisplayModes ?? Config.MenuBarDisplayMode.settingsCases
+        let effectiveMode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+        for mode in modes {
+            let item = NSMenuItem(
+                title: mode.titleKey.l10n,
+                action: selector(for: mode),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.state = effectiveMode == mode ? .on : .off
+            submenu.addItem(item)
+        }
         return submenu
+    }
+
+    private func selector(for mode: Config.MenuBarDisplayMode) -> Selector {
+        switch mode {
+        case .fiveHour: return #selector(selectMenuBarFiveHour)
+        case .weekly: return #selector(selectMenuBarWeekly)
+        case .highest: return #selector(selectMenuBarHighest)
+        }
     }
 
     private func percentModeMenu() -> NSMenu {
@@ -484,8 +478,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
 
-    private func currentMenuBarWindowLabel() -> String {
-        config.menuBarDisplayMode.titleKey.l10n
+    private func currentMenuBarWindowLabel(provider: ProviderUsage? = nil) -> String {
+        let mode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+        return mode.titleKey.l10n
     }
 
     private func usageWindowText(_ w: UsageWindow, fieldWidth: CGFloat) -> NSAttributedString {
@@ -503,33 +498,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         line.append(NSAttributedString(string: pctText, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)]))
 
-        // Match /usage-style reset text, and tag estimated numbers honestly.
+        // Match Codex's official compact reset display: time for same-day
+        // windows, date for longer windows.
         var tail: [String] = []
         if !w.rolling, let r = w.resetAt {
             if r.timeIntervalSinceNow <= 0 {
-                tail.append("status.resetNow".l10n)
+                tail.append("time.now".l10n)
+            } else if lastProvider?.providerID == .codex {
+                tail.append(codexResetText(r))
             } else {
                 tail.append(String(format: "status.reset".l10n, r.coarseCountdown()))
             }
         }
+        if let detail = w.detail { tail.append(detail) }
         if w.estimate { tail.append("status.estimated".l10n) }
         else if w.rolling { tail.append("status.rolling".l10n) }
         if !tail.isEmpty {
             line.append(NSAttributedString(string: "\t" + tail.joined(separator: " · "), attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: w.estimate ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor]))
+                .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+                .foregroundColor: NSColor.secondaryLabelColor]))
         }
 
         // Pin the tail to the row's right edge with a right tab stop, instead
         // of letting it trail the percentage text at whatever width that text
         // happens to be (which drifted row to row). Leave a few points of
-        // margin short of the field's actual edge — landing exactly on it
-        // gets the trailing characters clipped by rounding.
+        // margin short of the field's actual edge and align with the custom
+        // menu rows' trailing value column.
         let paragraph = NSMutableParagraphStyle()
-        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: fieldWidth - 6, options: [:])]
+        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: fieldWidth - 9, options: [:])]
         line.addAttribute(.paragraphStyle, value: paragraph,
                           range: NSRange(location: secondLineStart, length: line.length - secondLineStart))
         return line
+    }
+
+    private func codexResetText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        if Calendar.current.isDateInToday(date) {
+            formatter.setLocalizedDateFormatFromTemplate("jm")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        }
+        return formatter.string(from: date)
     }
 
     private func displayPercentFormat() -> String {
@@ -682,10 +692,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             switch item.identifier?.rawValue {
             case "menuBarMode":
                 let title = "menu.menuBarMode.title".l10n
-                let value = currentMenuBarWindowLabel()
+                let value = currentMenuBarWindowLabel(provider: lastProvider)
                 item.title = menuRowTitle(title, value)
                 item.view = MenuValueRowView(title: title, value: value, width: width)
-                item.submenu = menuBarModeMenu()
+                item.submenu = menuBarModeMenu(provider: lastProvider)
             case "percentMode":
                 let title = "menu.percentMode.title".l10n
                 let value = percentModeTitle(config.percentDisplayMode)
@@ -704,7 +714,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func selectedUsageWindowKind(_ windows: [UsageWindow]) -> UsageWindowKind? {
-        switch config.menuBarDisplayMode {
+        let mode = lastProvider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+        switch mode {
         case .fiveHour: return .fiveHour
         case .weekly: return .weekly
         case .highest:
@@ -739,9 +750,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hasAlertBaseline = true
     }
 
-    private func scheduleSessionWatcher() {
-        let day = newestSessionDayDir()
-        guard day != watchedSessionDay else { return }
+    private func scheduleSessionWatcher(for sourceFile: URL? = nil) {
+        let target = sourceFile ?? newestSessionFile()
+        guard target != watchedSessionPath else { return }
 
         sessionWatcher?.cancel()
         sessionWatcher = nil
@@ -749,10 +760,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             close(sessionWatcherFD)
             sessionWatcherFD = -1
         }
-        watchedSessionDay = day
+        watchedSessionPath = target
 
-        guard let day else { return }
-        let fd = open(day.path, O_EVTONLY)
+        guard let target else { return }
+        let fd = open(target.path, O_EVTONLY)
         guard fd >= 0 else { return }
         sessionWatcherFD = fd
 
@@ -783,21 +794,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
     }
 
-    private func newestSessionDayDir() -> URL? {
+    private func newestSessionFile() -> URL? {
         let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex/sessions", isDirectory: true)
         let fm = FileManager.default
-        func newestChildDir(_ dir: URL) -> URL? {
-            guard let items = try? fm.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return nil }
-            return items
-                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-                .max { $0.lastPathComponent < $1.lastPathComponent }
+        func mtime(_ u: URL) -> Date {
+            (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
         }
-        guard let year = newestChildDir(sessionsDir),
-              let month = newestChildDir(year),
-              let day = newestChildDir(month) else { return nil }
-        return day
+        guard let enumerator = fm.enumerator(
+            at: sessionsDir,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        return enumerator.compactMap { item -> URL? in
+            guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+            return values?.isRegularFile == true ? url : nil
+        }.max { mtime($0) < mtime($1) }
     }
 }
 

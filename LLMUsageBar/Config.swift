@@ -5,7 +5,8 @@ import Foundation
 struct Config: Codable {
     /// How often to refresh, seconds.
     var refreshSeconds: Double = 60
-    var menuBarDisplayMode: MenuBarDisplayMode = .fiveHour
+    var providerID: UsageProviderID = .codex
+    var menuBarDisplayMode: MenuBarDisplayMode = .weekly
     var percentDisplayMode: PercentDisplayMode = .remaining
     var thresholdAlertsEnabled: Bool = true
     var warningThreshold: Double = 80
@@ -16,7 +17,8 @@ struct Config: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         refreshSeconds = try c.decodeIfPresent(Double.self, forKey: .refreshSeconds) ?? 60
-        menuBarDisplayMode = try c.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .fiveHour
+        providerID = try c.decodeIfPresent(UsageProviderID.self, forKey: .providerID) ?? .codex
+        menuBarDisplayMode = try c.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .weekly
         percentDisplayMode = try c.decodeIfPresent(PercentDisplayMode.self, forKey: .percentDisplayMode) ?? .remaining
         thresholdAlertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .thresholdAlertsEnabled) ?? true
         warningThreshold = try c.decodeIfPresent(Double.self, forKey: .warningThreshold) ?? 80
@@ -29,6 +31,8 @@ struct Config: Codable {
         case highest
 
         var id: String { rawValue }
+        static var settingsCases: [MenuBarDisplayMode] { [.weekly, .highest] }
+
         var titleKey: String {
             switch self {
             case .fiveHour: return "settings.menuBarMode.fiveHour"
@@ -43,6 +47,7 @@ struct Config: Codable {
         case used
 
         var id: String { rawValue }
+
         var titleKey: String {
             switch self {
             case .remaining: return "settings.percentMode.remaining"
@@ -60,10 +65,14 @@ struct Config: Codable {
     static func load() -> Config {
         let url = Config.path
         guard let data = try? Data(contentsOf: url),
-              let cfg = try? JSONDecoder().decode(Config.self, from: data) else {
+              var cfg = try? JSONDecoder().decode(Config.self, from: data) else {
             let def = Config()
             def.save()  // write defaults so the user has something to edit
             return def
+        }
+        if cfg.providerID == .codex && cfg.menuBarDisplayMode == .fiveHour {
+            cfg.menuBarDisplayMode = .weekly
+            cfg.save()
         }
         return cfg
     }

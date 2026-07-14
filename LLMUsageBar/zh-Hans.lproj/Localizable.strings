@@ -5,7 +5,7 @@
 "action.settings" = "设置…";
 
 "alert.body" = "%@ 已接近上限。";
-"alert.title" = "Codex 用量已到 %d%%";
+"alert.title" = "用量已到 %d%%";
 
 "codex.detail.noOfficialLimits" = "无官方上限数据";
 "codex.note.rateLimitsEmpty" = "当前供应商未返回官方上限（rate_limits 为空）";
@@ -28,6 +28,8 @@
 "limit.weekly" = "每周上限";
 
 "menu.menuBarMode.title" = "显示内容";
+"provider.unsupported" = "暂未支持";
+
 "menu.percentMode.title" = "显示方式";
 
 "about.versionBuild" = "版本 %@  构建 %@";
@@ -40,7 +42,7 @@
 "settings.language" = "语言";
 "settings.languageFooter" = "重启应用后生效。";
 "settings.launchAtLogin" = "开机自动启动";
-"settings.menuBarDescription" = "选择菜单栏优先显示哪一个 Codex 上限。";
+"settings.menuBarDescription" = "选择菜单栏优先显示哪一个上限。";
 "settings.menuBarMode" = "菜单栏数值";
 "settings.menuBarMode.fiveHour" = "5 小时上限";
 "settings.menuBarMode.highest" = "最高风险";
@@ -48,7 +50,7 @@
 "settings.percentMode" = "百分比含义";
 "settings.percentMode.remaining" = "剩余用量";
 "settings.percentMode.used" = "已用用量";
-"settings.refreshDescription" = "菜单栏刷新 Codex 用量的频率，修改后会自动保存。";
+"settings.refreshDescription" = "Orb 刷新用量数据的频率，修改后会自动保存。";
 "settings.refreshInterval" = "刷新间隔（秒）";
 "settings.restartButton" = "立即重启";
 "settings.restartMessage" = "请重启 Orb 以应用语言更改。";
@@ -65,6 +67,7 @@
 
 "status.estimated" = "估算";
 "status.loading" = "读取中…";
+"status.notReported" = "未返回";
 "status.percentRemaining" = "剩余 %.0f%%";
 "status.percentUsed" = "已用 %.0f%%";
 "status.reset" = "重置 %@";

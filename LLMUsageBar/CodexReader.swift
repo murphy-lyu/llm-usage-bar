@@ -6,6 +6,14 @@ import Foundation
 /// so we surface those directly. If a local record is older than its reset
 /// time and Codex has not written a newer token_count yet, we locally advance
 /// that window so the menu bar does not stay stuck overnight.
+struct CodexUsageProvider: UsageProviderAdapter {
+    let providerID: UsageProviderID = .codex
+
+    func read(config: Config, overrideFile: URL?) -> ProviderUsage {
+        CodexReader.read(config: config, overrideFile: overrideFile)
+    }
+}
+
 enum CodexReader {
     /// A new Codex rollout commonly starts with one `token_count` whose
     /// `rate_limits` is null. Give the session writer a short window to publish
@@ -17,7 +25,7 @@ enum CodexReader {
 
     static func read(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
         guard let latest = overrideFile.flatMap({ latestTokenCount(in: $0, sourceFile: $0) }) ?? newestTokenCount() else {
-            return ProviderUsage(name: "Codex", short: "CX", available: false,
+            return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: false,
                                  windows: [], note: "codex.note.sessionsMissing".l10n)
         }
 
@@ -48,7 +56,7 @@ enum CodexReader {
                 kind: .session,
                 label: "codex.window.sessionUsage".l10n, percent: nil, resetAt: nil,
                 detail: detail, rolling: true))
-            return ProviderUsage(name: "Codex", short: "CX", available: true,
+            return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
                                  windows: windows,
                                  note: "codex.note.rateLimitsEmpty".l10n,
                                  lastActivity: latest.timestamp,
@@ -56,7 +64,7 @@ enum CodexReader {
                                  plan: plan)
         }
 
-        return ProviderUsage(name: "Codex", short: "CX", available: true,
+        return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
                              windows: windows, note: nil, lastActivity: latest.timestamp,
                              sourceFile: latest.sourceFile,
                              plan: plan)
@@ -105,7 +113,7 @@ enum CodexReader {
     }
 
     private static func newestTokenCount() -> TokenInfo? {
-        let candidates = recentSessionFiles(limit: 12)
+        let candidates = recentSessionFiles(limit: 80)
             .compactMap { latestTokenCount(in: $0, sourceFile: $0) }
         guard let newest = candidates.max(by: isOlder) else { return nil }
 
@@ -131,39 +139,27 @@ enum CodexReader {
             || (info.rateLimits?["secondary"] as? [String: Any]) != nil
     }
 
-    /// Sessions are laid out as sessions/YYYY/MM/DD/*.jsonl, filed under the day the
-    /// session *started*. A session that begins before midnight and keeps being
-    /// appended to after midnight still lives in yesterday's folder, so restricting
-    /// to only the single newest day-folder can miss the most recently active file.
-    /// We instead scan the newest few day-folders and pick globally by mtime.
-    private static func recentSessionFiles(limit: Int, dayFolders: Int = 3) -> [URL] {
+    /// Sessions are filed under the day the thread started, but a long-running
+    /// thread can keep receiving fresh `token_count` events days later. Pick by
+    /// file modification time across the whole session tree, then choose the
+    /// newest token timestamp from that bounded candidate set.
+    private static func recentSessionFiles(limit: Int) -> [URL] {
         let fm = FileManager.default
-        func childDirsDesc(_ dir: URL) -> [URL] {
-            guard let items = try? fm.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return [] }
-            return items
-                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
-                .sorted { $0.lastPathComponent > $1.lastPathComponent }  // numeric names sort lexically
-        }
         func mtime(_ u: URL) -> Date {
             (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
         }
 
-        var dayDirs: [URL] = []
-        outer: for year in childDirsDesc(sessionsDir) {
-            for month in childDirsDesc(year) {
-                for day in childDirsDesc(month) {
-                    dayDirs.append(day)
-                    if dayDirs.count >= dayFolders { break outer }
-                }
-            }
-        }
+        guard let enumerator = fm.enumerator(
+            at: sessionsDir,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
 
-        let files = dayDirs.flatMap { day -> [URL] in
-            (try? fm.contentsOfDirectory(
-                at: day, includingPropertiesForKeys: [.contentModificationDateKey]))?
-                .filter { $0.pathExtension == "jsonl" } ?? []
+        let files = enumerator.compactMap { item -> URL? in
+            guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
+            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+            return values?.isRegularFile == true ? url : nil
         }
         return Array(files.sorted { mtime($0) > mtime($1) }.prefix(limit))
     }

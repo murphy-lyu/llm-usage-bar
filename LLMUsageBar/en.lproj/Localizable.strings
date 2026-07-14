@@ -5,7 +5,7 @@
 "action.settings" = "Settings…";
 
 "alert.body" = "%@ is close to its limit.";
-"alert.title" = "Codex usage reached %d%%";
+"alert.title" = "Usage reached %d%%";
 
 "codex.detail.noOfficialLimits" = "No official limit data";
 "codex.note.rateLimitsEmpty" = "The current provider did not return official limits (rate_limits is empty)";
@@ -28,6 +28,8 @@
 "limit.weekly" = "Weekly limit";
 
 "menu.menuBarMode.title" = "Limit";
+"provider.unsupported" = "Not supported yet";
+
 "menu.percentMode.title" = "Percentage";
 
 "about.versionBuild" = "Version %@  Build %@";
@@ -40,7 +42,7 @@
 "settings.language" = "Language";
 "settings.languageFooter" = "Restart the app to apply the selected language.";
 "settings.launchAtLogin" = "Launch at login";
-"settings.menuBarDescription" = "Choose which Codex limit appears in the menu bar.";
+"settings.menuBarDescription" = "Choose which limit appears in the menu bar.";
 "settings.menuBarMode" = "Menu bar value";
 "settings.menuBarMode.fiveHour" = "5-hour limit";
 "settings.menuBarMode.highest" = "Highest risk";
@@ -48,7 +50,7 @@
 "settings.percentMode" = "Percentage meaning";
 "settings.percentMode.remaining" = "Usage remaining";
 "settings.percentMode.used" = "Usage used";
-"settings.refreshDescription" = "How often the menu bar refreshes Codex usage. Changes are saved automatically.";
+"settings.refreshDescription" = "How often Orb refreshes usage data. Changes are saved automatically.";
 "settings.refreshInterval" = "Refresh interval (seconds)";
 "settings.restartButton" = "Restart Now";
 "settings.restartMessage" = "Please restart Orb to apply the language change.";
@@ -65,6 +67,7 @@
 
 "status.estimated" = "Estimated";
 "status.loading" = "Loading…";
+"status.notReported" = "Not reported";
 "status.percentRemaining" = "%.0f%% remaining";
 "status.percentUsed" = "%.0f%% used";
 "status.reset" = "Resets in %@";

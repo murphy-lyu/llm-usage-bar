@@ -67,28 +67,6 @@ struct GeneralSettingsTab: View {
                 }
             }
 
-            Section(header: Text("settings.section.menuBar"),
-                    footer: Text("settings.menuBarDescription")) {
-                Picker("settings.percentMode", selection: Binding(
-                    get: { config.percentDisplayMode },
-                    set: { updateConfig(\.percentDisplayMode, $0) }
-                )) {
-                    ForEach(Config.PercentDisplayMode.allCases) { mode in
-                        Text(LocalizedStringKey(mode.titleKey)).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Picker("settings.menuBarMode", selection: Binding(
-                    get: { config.menuBarDisplayMode },
-                    set: { updateConfig(\.menuBarDisplayMode, $0) }
-                )) {
-                    ForEach(Config.MenuBarDisplayMode.allCases) { mode in
-                        Text(LocalizedStringKey(mode.titleKey)).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
 
             Section(header: Text("settings.section.alerts"),
                     footer: Text("settings.alertsDescription")) {

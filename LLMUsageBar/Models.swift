@@ -4,6 +4,65 @@ extension String {
     var l10n: String { NSLocalizedString(self, comment: "") }
 }
 
+enum UsageProviderID: String, Codable, CaseIterable, Identifiable {
+    case codex
+    case claude
+    case gemini
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .codex: return "Codex"
+        case .claude: return "Claude"
+        case .gemini: return "Gemini"
+        }
+    }
+
+    var shortName: String {
+        switch self {
+        case .codex: return "CX"
+        case .claude: return "CL"
+        case .gemini: return "GM"
+        }
+    }
+}
+
+protocol UsageProviderAdapter {
+    var providerID: UsageProviderID { get }
+    func read(config: Config, overrideFile: URL?) -> ProviderUsage
+}
+
+extension UsageProviderAdapter {
+    func read(config: Config) -> ProviderUsage {
+        read(config: config, overrideFile: nil)
+    }
+}
+
+enum UsageProviderRegistry {
+    static func adapter(for id: UsageProviderID) -> UsageProviderAdapter {
+        switch id {
+        case .codex:
+            return CodexUsageProvider()
+        case .claude, .gemini:
+            return UnsupportedUsageProvider(providerID: id)
+        }
+    }
+}
+
+private struct UnsupportedUsageProvider: UsageProviderAdapter {
+    let providerID: UsageProviderID
+
+    func read(config: Config, overrideFile: URL?) -> ProviderUsage {
+        ProviderUsage(providerID: providerID,
+                      name: providerID.displayName,
+                      short: providerID.shortName,
+                      available: false,
+                      windows: [],
+                      note: "provider.unsupported".l10n)
+    }
+}
+
 enum UsageWindowKind: String {
     case fiveHour
     case daily
@@ -36,6 +95,7 @@ struct UsageWindow {
 
 /// Everything we know about one provider (Claude Code / Codex).
 struct ProviderUsage {
+    var providerID: UsageProviderID = .codex
     var name: String           // "Claude Code", "Codex"
     var short: String          // "CC", "CX" — menu bar abbreviation
     var available: Bool        // did we find any data at all
@@ -64,15 +124,33 @@ struct ProviderUsage {
         return "–"
     }
 
+    var availableDisplayModes: [Config.MenuBarDisplayMode] {
+        var modes: [Config.MenuBarDisplayMode] = []
+        if windows.contains(where: { $0.kind == .weekly }) { modes.append(.weekly) }
+        if windows.contains(where: { $0.kind == .fiveHour }) { modes.append(.fiveHour) }
+        let fixedWindows = windows.filter { !$0.rolling && $0.percent != nil }
+        if fixedWindows.count > 1 { modes.append(.highest) }
+        if modes.isEmpty { modes.append(.highest) }
+        return modes
+    }
+
+    func effectiveDisplayMode(for preferred: Config.MenuBarDisplayMode) -> Config.MenuBarDisplayMode {
+        let modes = availableDisplayModes
+        if modes.contains(preferred) { return preferred }
+        if modes.contains(.weekly) { return .weekly }
+        if modes.contains(.fiveHour) { return .fiveHour }
+        return .highest
+    }
+
     func window(for mode: Config.MenuBarDisplayMode) -> UsageWindow? {
         switch mode {
         case .highest:
             return windows.filter { !$0.rolling }.max { $0.pct < $1.pct }
                 ?? windows.max { $0.pct < $1.pct }
         case .fiveHour:
-            return windows.first { $0.kind == .fiveHour } ?? window(for: .highest)
+            return windows.first { $0.kind == .fiveHour }
         case .weekly:
-            return windows.first { $0.kind == .weekly } ?? window(for: .highest)
+            return windows.first { $0.kind == .weekly }
         }
     }
 
@@ -82,18 +160,16 @@ struct ProviderUsage {
 
     func menuBarValue(for mode: Config.MenuBarDisplayMode,
                       percentMode: Config.PercentDisplayMode) -> String {
+        let mode = effectiveDisplayMode(for: mode)
         guard let w = window(for: mode) else { return menuBarValue }
         if let p = w.percent {
             let display = percentMode == .remaining ? 100 - p : p
             let text = "\(Int(display.rounded()))%"
-            switch mode {
-            case .fiveHour, .weekly:
-                return "\(w.menuBarPrefix) \(text)"
-            case .highest: return "\(w.menuBarPrefix) \(text)"
-            }
+            return "\(w.menuBarPrefix) \(text)"
         }
         return menuBarValue
     }
+
 }
 
 private extension UsageWindow {
