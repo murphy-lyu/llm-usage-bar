@@ -14,6 +14,7 @@
 		B4A2E92765BB4EA4A3C62318 /* SettingsOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92865BB4EA4A3C62318 /* SettingsOpener.swift */; };
 		B4A2E92965BB4EA4A3C62318 /* SettingsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92A65BB4EA4A3C62318 /* SettingsWindowView.swift */; };
 		B4A2E92B65BB4EA4A3C62318 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92C65BB4EA4A3C62318 /* NotificationManager.swift */; };
+		B4A2E92E65BB4EA4A3C62318 /* CodexAppServerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A2E92D65BB4EA4A3C62318 /* CodexAppServerClient.swift */; };
 		F61F7A4C12796B239B876C9E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E47D490B366870C7EDB09E7 /* Assets.xcassets */; };
 		F62E2597A93E2E972DA07E92 /* CodexReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B28710C1FBB59297894584F /* CodexReader.swift */; };
 		F65048FC73C20B8ACD70BA44 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D92F9AB294A9E97846C1D6 /* Models.swift */; };
@@ -32,6 +33,7 @@
 		B4A2E92865BB4EA4A3C62318 /* SettingsOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsOpener.swift; sourceTree = "<group>"; };
 		B4A2E92A65BB4EA4A3C62318 /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
 		B4A2E92C65BB4EA4A3C62318 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		B4A2E92D65BB4EA4A3C62318 /* CodexAppServerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerClient.swift; sourceTree = "<group>"; };
 		D2D92F9AB294A9E97846C1D6 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		D5AB5546B9113C3681BF0CD9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -41,6 +43,7 @@
 			isa = PBXGroup;
 			children = (
 				5E47D490B366870C7EDB09E7 /* Assets.xcassets */,
+				B4A2E92D65BB4EA4A3C62318 /* CodexAppServerClient.swift */,
 				4B28710C1FBB59297894584F /* CodexReader.swift */,
 				8BA1155464E28071341590C6 /* Config.swift */,
 				D5AB5546B9113C3681BF0CD9 /* Info.plist */,
@@ -145,6 +148,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B4A2E92E65BB4EA4A3C62318 /* CodexAppServerClient.swift in Sources */,
 				F62E2597A93E2E972DA07E92 /* CodexReader.swift in Sources */,
 				A1C9D3DB151B536353E39BDB /* Config.swift in Sources */,
 				F65048FC73C20B8ACD70BA44 /* Models.swift in Sources */,

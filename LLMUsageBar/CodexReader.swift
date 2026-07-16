@@ -24,6 +24,11 @@ enum CodexReader {
         .appendingPathComponent(".codex/sessions", isDirectory: true)
 
     static func read(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
+        if overrideFile == nil,
+           let snapshot = CodexAppServerClient.readRateLimits() {
+            return provider(from: snapshot)
+        }
+
         guard let latest = overrideFile.flatMap({ latestTokenCount(in: $0, sourceFile: $0) }) ?? newestTokenCount() else {
             return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: false,
                                  windows: [], note: "codex.note.sessionsMissing".l10n)
@@ -68,6 +73,36 @@ enum CodexReader {
                              windows: windows, note: nil, lastActivity: latest.timestamp,
                              sourceFile: latest.sourceFile,
                              plan: plan)
+    }
+
+    private static func provider(from snapshot: CodexRateLimitSnapshot) -> ProviderUsage {
+        let reportedWindows: [(String, CodexRateLimitWindow?)] = [
+            ("limit.primary".l10n, snapshot.primary),
+            ("limit.secondary".l10n, snapshot.secondary)
+        ]
+        let windows = reportedWindows.compactMap { fallback, rateLimit -> UsageWindow? in
+            guard let rateLimit else { return nil }
+            return UsageWindow(
+                kind: windowKind(minutes: rateLimit.windowMinutes),
+                label: windowLabel(minutes: rateLimit.windowMinutes, fallback: fallback),
+                percent: rateLimit.usedPercent,
+                resetAt: rateLimit.resetAt,
+                detail: nil
+            )
+        }
+        let plan = (snapshot.planType ?? authPlanType()).map(planName)
+
+        return ProviderUsage(
+            providerID: .codex,
+            name: "Codex",
+            short: "CX",
+            available: !windows.isEmpty,
+            windows: windows,
+            note: nil,
+            lastActivity: snapshot.fetchedAt,
+            sourceFile: nil,
+            plan: plan
+        )
     }
 
     /// The ChatGPT plan (e.g. "plus") is embedded as a claim in the id_token JWT
