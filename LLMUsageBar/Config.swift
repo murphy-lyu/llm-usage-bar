@@ -31,7 +31,7 @@ struct Config: Codable {
         case highest
 
         var id: String { rawValue }
-        static var settingsCases: [MenuBarDisplayMode] { [.weekly, .highest] }
+        static var settingsCases: [MenuBarDisplayMode] { [.fiveHour, .weekly, .highest] }
 
         var titleKey: String {
             switch self {
@@ -65,14 +65,10 @@ struct Config: Codable {
     static func load() -> Config {
         let url = Config.path
         guard let data = try? Data(contentsOf: url),
-              var cfg = try? JSONDecoder().decode(Config.self, from: data) else {
+              let cfg = try? JSONDecoder().decode(Config.self, from: data) else {
             let def = Config()
             def.save()  // write defaults so the user has something to edit
             return def
-        }
-        if cfg.providerID == .codex && cfg.menuBarDisplayMode == .fiveHour {
-            cfg.menuBarDisplayMode = .weekly
-            cfg.save()
         }
         return cfg
     }
