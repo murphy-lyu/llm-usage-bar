@@ -6,7 +6,8 @@ struct Config: Codable {
     /// How often to refresh, seconds.
     var refreshSeconds: Double = 60
     var providerID: UsageProviderID = .codex
-    var menuBarDisplayMode: MenuBarDisplayMode = .weekly
+    var selectedQuotaIDs: [String: String] = [:]
+    var menuBarDisplayMode: MenuBarDisplayMode = .fiveHour
     var percentDisplayMode: PercentDisplayMode = .remaining
     var thresholdAlertsEnabled: Bool = true
     var warningThreshold: Double = 80
@@ -18,7 +19,8 @@ struct Config: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         refreshSeconds = try c.decodeIfPresent(Double.self, forKey: .refreshSeconds) ?? 60
         providerID = try c.decodeIfPresent(UsageProviderID.self, forKey: .providerID) ?? .codex
-        menuBarDisplayMode = try c.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .weekly
+        selectedQuotaIDs = try c.decodeIfPresent([String: String].self, forKey: .selectedQuotaIDs) ?? [:]
+        menuBarDisplayMode = try c.decodeIfPresent(MenuBarDisplayMode.self, forKey: .menuBarDisplayMode) ?? .fiveHour
         percentDisplayMode = try c.decodeIfPresent(PercentDisplayMode.self, forKey: .percentDisplayMode) ?? .remaining
         thresholdAlertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .thresholdAlertsEnabled) ?? true
         warningThreshold = try c.decodeIfPresent(Double.self, forKey: .warningThreshold) ?? 80
@@ -71,6 +73,14 @@ struct Config: Codable {
             return def
         }
         return cfg
+    }
+
+    func selectedQuotaID(for providerID: UsageProviderID) -> String? {
+        selectedQuotaIDs[providerID.rawValue]
+    }
+
+    mutating func selectQuota(_ quotaID: String, for providerID: UsageProviderID) {
+        selectedQuotaIDs[providerID.rawValue] = quotaID
     }
 
     func save() {

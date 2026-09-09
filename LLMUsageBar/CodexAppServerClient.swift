@@ -6,10 +6,24 @@ struct CodexRateLimitWindow {
     var resetAt: Date?
 }
 
-struct CodexRateLimitSnapshot {
+struct CodexRateLimitGroup {
+    var id: String
+    var name: String?
     var primary: CodexRateLimitWindow?
     var secondary: CodexRateLimitWindow?
     var planType: String?
+}
+
+struct CodexCreditsSnapshot {
+    var balance: String?
+    var hasCredits: Bool
+    var unlimited: Bool
+}
+
+struct CodexRateLimitSnapshot {
+    var groups: [CodexRateLimitGroup]
+    var credits: CodexCreditsSnapshot?
+    var resetCreditsAvailable: Int
     var fetchedAt: Date
 }
 
@@ -23,6 +37,10 @@ enum CodexAppServerClient {
         connection.readRateLimits()
     }
 
+    static func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
+        connection.setRateLimitsUpdateHandler(handler)
+    }
+
     /// Keeps one lightweight app-server process for Orb's lifetime. Starting a
     /// new server every minute also warms models and plugins every minute, so a
     /// persistent connection is both faster and substantially less wasteful.
@@ -32,6 +50,13 @@ enum CodexAppServerClient {
         private var inputHandle: FileHandle?
         private var reader: JSONLineResponseReader?
         private var nextRequestID = 2
+        private var rateLimitsUpdateHandler: (() -> Void)?
+
+        func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
+            lock.lock()
+            rateLimitsUpdateHandler = handler
+            lock.unlock()
+        }
 
         func readRateLimits() -> CodexRateLimitSnapshot? {
             lock.lock()
@@ -77,7 +102,13 @@ enum CodexAppServerClient {
             process.standardOutput = outputPipe
             process.standardError = FileHandle.nullDevice
 
-            let reader = JSONLineResponseReader(handle: outputPipe.fileHandleForReading)
+            let reader = JSONLineResponseReader(
+                handle: outputPipe.fileHandleForReading,
+                notificationHandler: { [weak self] method in
+                    guard method == "account/rateLimits/updated" else { return }
+                    self?.notifyRateLimitsUpdated()
+                }
+            )
             self.process = process
             self.inputHandle = inputPipe.fileHandleForWriting
             self.reader = reader
@@ -107,6 +138,13 @@ enum CodexAppServerClient {
                 stop()
                 return false
             }
+        }
+
+        private func notifyRateLimitsUpdated() {
+            lock.lock()
+            let handler = rateLimitsUpdateHandler
+            lock.unlock()
+            handler?()
         }
 
         private func stop() {
@@ -152,18 +190,55 @@ enum CodexAppServerClient {
         guard let result = response["result"] as? [String: Any] else { return nil }
 
         let direct = result["rateLimits"] as? [String: Any]
-        let byID = (result["rateLimitsByLimitId"] as? [String: Any])?["codex"] as? [String: Any]
-        guard let limits = direct ?? byID else { return nil }
+        let byID = result["rateLimitsByLimitId"] as? [String: Any] ?? [:]
+        var groups = byID.compactMap { id, value -> CodexRateLimitGroup? in
+            guard let limits = value as? [String: Any] else { return nil }
+            return rateLimitGroup(from: limits, fallbackID: id)
+        }
 
+        // Older app-server versions only return the direct rateLimits object.
+        // Newer versions include the same general bucket in rateLimitsByLimitId;
+        // add the direct object only when it is not already represented.
+        if let direct,
+           let group = rateLimitGroup(from: direct, fallbackID: "codex"),
+           !groups.contains(where: { $0.id == group.id }) {
+            groups.append(group)
+        }
+        guard !groups.isEmpty else { return nil }
+
+        groups.sort {
+            if $0.id == "codex", $1.id != "codex" { return true }
+            if $1.id == "codex", $0.id != "codex" { return false }
+            return ($0.name ?? $0.id).localizedCaseInsensitiveCompare($1.name ?? $1.id) == .orderedAscending
+        }
+
+        let credits = direct.flatMap(creditsSnapshot)
+            ?? groups.compactMap { group in
+                guard let raw = byID[group.id] as? [String: Any] else { return nil }
+                return creditsSnapshot(raw)
+            }.first
+        let resetCredits = result["rateLimitResetCredits"] as? [String: Any]
+        let resetCreditsAvailable = Int(number(resetCredits?["availableCount"]) ?? 0)
+
+        return CodexRateLimitSnapshot(
+            groups: groups,
+            credits: credits,
+            resetCreditsAvailable: max(0, resetCreditsAvailable),
+            fetchedAt: Date()
+        )
+    }
+
+    private static func rateLimitGroup(from limits: [String: Any],
+                                       fallbackID: String) -> CodexRateLimitGroup? {
         let primary = rateLimitWindow(from: limits["primary"])
         let secondary = rateLimitWindow(from: limits["secondary"])
         guard primary != nil || secondary != nil else { return nil }
-
-        return CodexRateLimitSnapshot(
+        return CodexRateLimitGroup(
+            id: limits["limitId"] as? String ?? fallbackID,
+            name: limits["limitName"] as? String,
             primary: primary,
             secondary: secondary,
-            planType: limits["planType"] as? String,
-            fetchedAt: Date()
+            planType: limits["planType"] as? String
         )
     }
 
@@ -174,6 +249,17 @@ enum CodexAppServerClient {
             usedPercent: usedPercent,
             windowMinutes: number(object["windowDurationMins"]),
             resetAt: number(object["resetsAt"]).map(Date.init(timeIntervalSince1970:))
+        )
+    }
+
+    private static func creditsSnapshot(_ limits: [String: Any]) -> CodexCreditsSnapshot? {
+        guard let object = limits["credits"] as? [String: Any],
+              let hasCredits = object["hasCredits"] as? Bool,
+              let unlimited = object["unlimited"] as? Bool else { return nil }
+        return CodexCreditsSnapshot(
+            balance: object["balance"] as? String,
+            hasCredits: hasCredits,
+            unlimited: unlimited
         )
     }
 
@@ -190,9 +276,11 @@ private final class JSONLineResponseReader {
     private var buffer = Data()
     private var responses: [Int: [String: Any]] = [:]
     private let handle: FileHandle
+    private let notificationHandler: (String) -> Void
 
-    init(handle: FileHandle) {
+    init(handle: FileHandle, notificationHandler: @escaping (String) -> Void) {
         self.handle = handle
+        self.notificationHandler = notificationHandler
         handle.readabilityHandler = { [weak self] handle in
             self?.consume(handle.availableData)
         }
@@ -221,17 +309,22 @@ private final class JSONLineResponseReader {
             return
         }
 
+        var notifications: [String] = []
         condition.lock()
         buffer.append(data)
         while let newline = buffer.firstIndex(of: 0x0A) {
             let line = buffer[..<newline]
             buffer.removeSubrange(...newline)
             guard !line.isEmpty,
-                  let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
-                  let id = (object["id"] as? NSNumber)?.intValue else { continue }
-            responses[id] = object
+                  let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else { continue }
+            if let id = (object["id"] as? NSNumber)?.intValue {
+                responses[id] = object
+            } else if let method = object["method"] as? String {
+                notifications.append(method)
+            }
         }
         condition.broadcast()
         condition.unlock()
+        notifications.forEach(notificationHandler)
     }
 }

@@ -109,6 +109,39 @@ private final class MenuValueRowView: NSView {
     }
 }
 
+/// Compact, non-interactive account metadata shown only when it carries useful
+/// information, such as a positive credit balance or available limit resets.
+private final class AuxiliaryValueRowView: NSView {
+    init(title: String, value: String, width: CGFloat) {
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        titleLabel.textColor = .secondaryLabelColor
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        let valueLabel = NSTextField(labelWithString: value)
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valueLabel.textColor = .secondaryLabelColor
+        valueLabel.alignment = .right
+        valueLabel.lineBreakMode = .byTruncatingTail
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(valueLabel)
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
+            valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -27),
+            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 /// The top title row (e.g. "Codex"), with an optional right-aligned auxiliary
 /// value (e.g. the plan name) laid out against a fixed `width` so it lines up
 /// with the rest of the panel. Non-interactive: full-color text, no highlight.
@@ -299,9 +332,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         placeholder.delegate = self
         statusItem.menu = placeholder
         if config.thresholdAlertsEnabled { NotificationManager.shared.requestIfNeeded() }
+        CodexAppServerClient.setRateLimitsUpdateHandler { [weak self] in
+            DispatchQueue.main.async {
+                self?.debouncedRefresh(after: 0.15)
+            }
+        }
         refresh()
         scheduleTimer()
         scheduleSessionWatcher()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        CodexAppServerClient.setRateLimitsUpdateHandler(nil)
     }
 
     private func scheduleTimer() {
@@ -342,13 +384,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 .foregroundColor: NSColor.secondaryLabelColor])
             return
         }
-        let mode = p.effectiveDisplayMode(for: config.menuBarDisplayMode)
-        let selected = p.window(for: mode)
+        let quotaID = config.selectedQuotaID(for: p.providerID)
+        let mode = p.effectiveDisplayMode(for: config.menuBarDisplayMode, quotaID: quotaID)
+        let selected = p.window(for: mode, quotaID: quotaID)
         let pct = selected?.percent ?? p.headlinePercent ?? 0
         let color: NSColor = selected?.percent == nil && p.headlinePercent == nil ? .labelColor
             : pct >= 90 ? .systemRed : pct >= 75 ? .systemOrange : .labelColor
         button.attributedTitle = NSAttributedString(
-            string: p.menuBarValue(for: mode, percentMode: config.percentDisplayMode), attributes: [
+            string: p.menuBarValue(for: mode,
+                                   percentMode: config.percentDisplayMode,
+                                   quotaID: quotaID), attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: color])
     }
@@ -362,8 +407,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             plan: p.plan, width: menuWidth))
         if let note = p.note { menu.addItem(sub("· \(note)", dim: true)) }
         if p.available {
-            menu.addItem(usageWindowPickerItem(p.windows, width: menuWidth))
+            let quotas = p.effectiveQuotas
+            let selectedQuotaID = p.selectedQuota(
+                preferredID: config.selectedQuotaID(for: p.providerID)).id
+            if quotas.count == 1 {
+                menu.addItem(usageWindowPickerItem(quotas[0].windows,
+                                                   quotaID: quotas[0].id,
+                                                   width: menuWidth))
+            } else {
+                for (index, quota) in quotas.enumerated() {
+                    if index > 0 { menu.addItem(.separator()) }
+                    menu.addItem(quotaHeaderItem(quota.name, width: menuWidth))
+                    menu.addItem(usageWindowPickerItem(quota.windows,
+                                                       quotaID: quota.id,
+                                                       width: menuWidth))
+                }
+            }
+            let extras = accountExtras(for: p)
+            if !extras.isEmpty {
+                menu.addItem(.separator())
+                for extra in extras {
+                    menu.addItem(auxiliaryRow(extra.title, value: extra.value, width: menuWidth))
+                }
+            }
             menu.addItem(.separator())
+            if quotas.count > 1 {
+                menu.addItem(quotaRowItem(width: menuWidth,
+                                          provider: p,
+                                          selectedQuotaID: selectedQuotaID))
+            }
             menu.addItem(percentModeRowItem(width: menuWidth))
             menu.addItem(menuBarModeRowItem(width: menuWidth, provider: p))
         }
@@ -393,6 +465,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    private func auxiliaryRow(_ title: String, value: String, width: CGFloat) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.view = AuxiliaryValueRowView(title: title, value: value, width: width)
+        return item
+    }
+
+    private func accountExtras(for provider: ProviderUsage) -> [(title: String, value: String)] {
+        var extras: [(String, String)] = []
+        if let credits = provider.credits, credits.shouldDisplay {
+            let value: String
+            if credits.unlimited {
+                value = "usage.credits.unlimited".l10n
+            } else if let balance = credits.balance, !balance.isEmpty {
+                value = balance
+            } else {
+                value = "usage.credits.available".l10n
+            }
+            extras.append(("usage.credits.title".l10n, value))
+        }
+        if provider.resetCreditsAvailable > 0 {
+            extras.append((
+                "usage.resetCredits.title".l10n,
+                String(format: "usage.resetCredits.value".l10n, provider.resetCreditsAvailable)
+            ))
+        }
+        return extras
+    }
+
     private func contentWidth() -> CGFloat {
         300
     }
@@ -407,6 +507,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    private func quotaRowItem(width: CGFloat,
+                              provider: ProviderUsage,
+                              selectedQuotaID: String) -> NSMenuItem {
+        let title = "menu.quota.title".l10n
+        let quota = provider.selectedQuota(preferredID: selectedQuotaID)
+        let item = NSMenuItem(title: menuRowTitle(title, quota.shortName), action: nil, keyEquivalent: "")
+        item.view = MenuValueRowView(title: title, value: quota.shortName, width: width)
+        item.identifier = NSUserInterfaceItemIdentifier("quota")
+        item.submenu = quotaMenu(provider: provider, selectedQuotaID: selectedQuotaID)
+        return item
+    }
+
+    private func quotaMenu(provider: ProviderUsage, selectedQuotaID: String) -> NSMenu {
+        let submenu = NSMenu()
+        for quota in provider.effectiveQuotas {
+            let item = NSMenuItem(title: quota.name,
+                                  action: #selector(selectQuota(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = quota.id
+            item.state = quota.id == selectedQuotaID ? .on : .off
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
     private func percentModeRowItem(width: CGFloat) -> NSMenuItem {
         let title = "menu.percentMode.title".l10n
         let value = percentModeTitle(config.percentDisplayMode)
@@ -419,8 +545,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func menuBarModeMenu(provider: ProviderUsage? = nil) -> NSMenu {
         let submenu = NSMenu()
-        let modes = provider?.availableDisplayModes ?? Config.MenuBarDisplayMode.settingsCases
-        let effectiveMode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+        let quotaID = provider.flatMap { config.selectedQuotaID(for: $0.providerID) }
+        let modes = provider?.availableDisplayModes(quotaID: quotaID) ?? Config.MenuBarDisplayMode.settingsCases
+        let effectiveMode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode,
+                                                            quotaID: quotaID) ?? config.menuBarDisplayMode
         for mode in modes {
             let item = NSMenuItem(
                 title: mode.titleKey.l10n,
@@ -479,7 +607,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
 
     private func currentMenuBarWindowLabel(provider: ProviderUsage? = nil) -> String {
-        let mode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+        let quotaID = provider.flatMap { config.selectedQuotaID(for: $0.providerID) }
+        let mode = provider?.effectiveDisplayMode(for: config.menuBarDisplayMode,
+                                                  quotaID: quotaID) ?? config.menuBarDisplayMode
         return mode.titleKey.l10n
     }
 
@@ -561,7 +691,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor]))
     }
 
+    private func quotaHeaderItem(_ title: String, width: CGFloat) -> NSMenuItem {
+        let attr = NSAttributedString(string: title, attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ])
+        let item = displayRow(attr, leftPad: 14, topPad: 3)
+        item.view?.frame.size.width = width
+        return item
+    }
+
     private func usageWindowPickerItem(_ windows: [UsageWindow],
+                                       quotaID: String,
                                        width: CGFloat,
                                        leftPad: CGFloat = 14,
                                        topPad: CGFloat = 5) -> NSMenuItem {
@@ -570,7 +711,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let rows = windows.map { ($0.kind, usageWindowText($0, fieldWidth: fieldWidth)) }
         let picker = UsageWindowPickerView(
             items: rows,
-            selectedKind: selectedUsageWindowKind(windows),
+            selectedKind: selectedUsageWindowKind(windows, quotaID: quotaID),
             width: width,
             leftPad: leftPad,
             topPad: topPad
@@ -642,14 +783,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         selectMenuBarMode(.highest)
     }
 
+    @objc private func selectQuota(_ sender: NSMenuItem) {
+        guard let quotaID = sender.representedObject as? String,
+              let provider = lastProvider else { return }
+        config.selectQuota(quotaID, for: provider.providerID)
+        config.save()
+        updateTitle(provider)
+        rebuildMenu(provider)
+        settingsOpener?.syncIfOpen(config: config)
+    }
+
     private func selectMenuBarMode(_ mode: Config.MenuBarDisplayMode) {
         config.menuBarDisplayMode = mode
         config.save()
         if let provider = lastProvider {
             updateTitle(provider)
+            rebuildMenu(provider)
         }
-        updateUsageWindowSelection()
-        updateDisplayMenuRows()
         settingsOpener?.syncIfOpen(config: config)
     }
 
@@ -658,63 +808,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         config.save()
         if let provider = lastProvider {
             updateTitle(provider)
-            updateUsageWindowContent(provider)
+            rebuildMenu(provider)
         }
-        updateDisplayMenuRows()
         settingsOpener?.syncIfOpen(config: config)
     }
 
-    private func updateUsageWindowSelection() {
-        guard let menu = statusItem.menu else { return }
-        for item in menu.items {
-            guard let picker = item.view as? UsageWindowPickerView else { continue }
-            picker.setSelectedKind(selectedUsageWindowKind(lastProvider?.windows ?? []))
-        }
-        menu.update()
-    }
-
-    private func updateUsageWindowContent(_ provider: ProviderUsage) {
-        guard let menu = statusItem.menu else { return }
-        let width = contentWidth()
-        let fieldWidth = width - 14 - 18
-        let rows = provider.windows.map { ($0.kind, usageWindowText($0, fieldWidth: fieldWidth)) }
-        for item in menu.items {
-            guard let picker = item.view as? UsageWindowPickerView else { continue }
-            picker.update(items: rows, selectedKind: selectedUsageWindowKind(provider.windows))
-        }
-        menu.update()
-    }
-
-    private func updateDisplayMenuRows() {
-        guard let menu = statusItem.menu else { return }
-        let width = contentWidth()
-        for item in menu.items {
-            switch item.identifier?.rawValue {
-            case "menuBarMode":
-                let title = "menu.menuBarMode.title".l10n
-                let value = currentMenuBarWindowLabel(provider: lastProvider)
-                item.title = menuRowTitle(title, value)
-                item.view = MenuValueRowView(title: title, value: value, width: width)
-                item.submenu = menuBarModeMenu(provider: lastProvider)
-            case "percentMode":
-                let title = "menu.percentMode.title".l10n
-                let value = percentModeTitle(config.percentDisplayMode)
-                item.title = menuRowTitle(title, value)
-                item.view = MenuValueRowView(title: title, value: value, width: width)
-                item.submenu = percentModeMenu()
-            default:
-                continue
-            }
-        }
-        menu.update()
+    private func rebuildMenu(_ provider: ProviderUsage) {
+        let menu = buildMenu(provider)
+        menu.delegate = self
+        statusItem.menu = menu
     }
 
     func menuWillOpen(_ menu: NSMenu) {
         refresh()
     }
 
-    private func selectedUsageWindowKind(_ windows: [UsageWindow]) -> UsageWindowKind? {
-        let mode = lastProvider?.effectiveDisplayMode(for: config.menuBarDisplayMode) ?? config.menuBarDisplayMode
+    private func selectedUsageWindowKind(_ windows: [UsageWindow], quotaID: String) -> UsageWindowKind? {
+        guard let provider = lastProvider,
+              provider.selectedQuota(preferredID: config.selectedQuotaID(for: provider.providerID)).id == quotaID else {
+            return nil
+        }
+        let mode = provider.effectiveDisplayMode(for: config.menuBarDisplayMode,
+                                                 quotaID: quotaID)
         switch mode {
         case .fiveHour: return .fiveHour
         case .weekly: return .weekly
@@ -731,21 +846,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        for window in provider.windows where !window.rolling {
-            guard let percent = window.percent else { continue }
-            let windowKey = window.kind.rawValue
-            let previous = lastPercents[windowKey] ?? percent
-            let levels: [(String, Double)] = [
-                ("warning", config.warningThreshold),
-                ("critical", config.criticalThreshold)
-            ]
-            for (level, threshold) in levels where percent >= threshold {
-                guard hasAlertBaseline, previous < threshold else { continue }
-                NotificationManager.shared.notifyLimit(label: window.label,
-                                                       percent: Int(percent.rounded()),
-                                                       level: "\(windowKey)-\(level)")
+        for quota in provider.effectiveQuotas {
+            for window in quota.windows where !window.rolling {
+                guard let percent = window.percent else { continue }
+                let windowKey = "\(provider.providerID.rawValue)/\(quota.id)/\(window.kind.rawValue)"
+                let previous = lastPercents[windowKey] ?? percent
+                let levels: [(String, Double)] = [
+                    ("warning", config.warningThreshold),
+                    ("critical", config.criticalThreshold)
+                ]
+                for (level, threshold) in levels where percent >= threshold {
+                    guard hasAlertBaseline, previous < threshold else { continue }
+                    let label = provider.effectiveQuotas.count > 1
+                        ? "\(quota.shortName) · \(window.label)"
+                        : window.label
+                    NotificationManager.shared.notifyLimit(label: label,
+                                                           percent: Int(percent.rounded()),
+                                                           level: "\(windowKey)-\(level)")
+                }
+                lastPercents[windowKey] = percent
             }
-            lastPercents[windowKey] = percent
         }
         hasAlertBaseline = true
     }
@@ -784,14 +904,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         sessionWatcher = watcher
     }
 
-    private func debouncedRefresh() {
+    private func debouncedRefresh(after delay: TimeInterval = 0.5) {
         refreshDebounce?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.refresh()
             self?.scheduleSessionWatcher()
         }
         refreshDebounce = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func newestSessionFile() -> URL? {
@@ -823,11 +943,25 @@ if CommandLine.arguments.contains("--once") {
         .map { URL(fileURLWithPath: $0) }
     let p = CodexReader.read(config: cfg, overrideFile: override)
     print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")  plan=\(p.plan ?? "nil")")
+    if let credits = p.credits {
+        print("   credits=\(credits.balance ?? "nil") hasCredits=\(credits.hasCredits) unlimited=\(credits.unlimited) resets=\(p.resetCreditsAvailable)")
+    }
+    let selectedQuotaID = cfg.selectedQuotaID(for: p.providerID)
+    let selectedQuota = p.selectedQuota(preferredID: selectedQuotaID)
+    let selectedMode = p.effectiveDisplayMode(for: cfg.menuBarDisplayMode,
+                                              quotaID: selectedQuota.id)
+    print("   selected=\(selectedQuota.id)/\(selectedMode.rawValue)  menu=\(p.menuBarValue(for: selectedMode, percentMode: cfg.percentDisplayMode, quotaID: selectedQuota.id))")
     if let n = p.note { print("   note: \(n)") }
-    for w in p.windows {
-        let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
-        let reset = w.resetAt.map { "\($0.countdownString()) (\($0))" } ?? (w.rolling ? "rolling" : "n/a")
-        print("   - \(w.label): \(pct)  bar=\(w.pct.progressBar())  reset=\(reset)  detail=\(w.detail ?? "-")")
+    for quota in p.effectiveQuotas {
+        print("   quota \(quota.id): \(quota.name)")
+        for w in quota.windows {
+            let pct = w.percent.map { String(format: "%.1f%%", $0) } ?? "nil"
+            let reset = w.resetAt.map { "\($0.countdownString()) (\($0))" } ?? (w.rolling ? "rolling" : "n/a")
+            print("      - \(w.label): \(pct)  bar=\(w.pct.progressBar())  reset=\(reset)  detail=\(w.detail ?? "-")")
+        }
+        let modes = p.availableDisplayModes(quotaID: quota.id)
+            .map(\.rawValue).joined(separator: ",")
+        print("      modes=\(modes)")
     }
     exit(0)
 }

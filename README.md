@@ -1,85 +1,85 @@
-# LLM Usage Bar
+# Orb
 
-Mac 菜单栏小工具，监测 **Codex** 的额度使用情况——不看「消耗了多少 token」，而看**周期内占比**和**距离下次重置还有多久**，免去每次点开客户端查看。
+Orb 是一款 macOS 菜单栏用量监测工具。目前支持 Codex，并为 Claude、Gemini 等提供彼此独立的供应商适配结构。
 
-菜单栏长这样：`CX 16%`。占比 ≥75% 变橙、≥90% 变红。展示格式对齐客户端：`占比 % · 重置 2d`。
+Orb 展示官方账户用量窗口、已用或剩余百分比及重置时间。菜单栏可以固定显示 5 小时、每周或当前风险最高的额度，避免展示对象在用户不知情时变化。
 
-> **关于 Claude Code**：曾计划一并监测，但 Claude 不把官方额度百分比写到本地（`/usage` 是运行时实时从 API 拉的），而 OAuth token 被 Anthropic 有意限制只能官方客户端用，直连一律 `403 Request not allowed`。本地只能做**估算**，给不了精准值，故移除。详见 [issue 讨论 / 提交历史]。Codex 不同——它把官方额度写进了本地文件，可以读到**精确值**。
+## Codex 用量口径
 
-## 数据来源（全部本地读取，不联网）
+使用 ChatGPT 账号登录时，ChatGPT Work 与 Codex 共享用量。当前官方用量通常包含滚动 5 小时窗口，并可能叠加每周限制；Codex-Spark 等模型也可能拥有独立额度。Orb 不预设固定组合，而是按 Codex App Server 实际返回的额度组和窗口展示。
 
-读取 `~/.codex/sessions/YYYY/MM/DD/*.jsonl` 里最新的 `token_count` 事件，取其中的官方 `rate_limits`：
+Orb 优先通过本机 Codex App Server 的 `account/rateLimits/read` 接口读取账户级官方数据，因此能够反映其他设备产生的用量，无需在 Orb 内再次登录。App Server 发出 `account/rateLimits/updated` 通知时，Orb 会立即重新读取；60 秒轮询作为兜底。
 
-```jsonc
-"rate_limits": {
-  "primary":   { "used_percent": 16.0, "window_minutes": 43200, "resets_at": 1783148678 },
-  "secondary": { ... }
-}
-```
+如果 App Server 暂时不可用，Orb 会回退到 `~/.codex/sessions` 中最新 `token_count` 事件。此时数据只代表本机最近写入的状态，界面会按可获得的字段展示。
 
-| 字段 | 含义 | 展示 |
-|------|------|------|
-| `used_percent` | 官方占比 | `16%` |
-| `window_minutes` | 窗口长度 | `43200` → 30天额度 |
-| `resets_at` | 重置时间戳 | `重置 21d` |
+## 展示内容
 
-`primary` / `secondary` 分别对应不同窗口（如 30 天 / 周），都会列出。**全部官方精确值，零估算。**
+- 官方返回的 5 小时、每周及其他动态窗口
+- 已用用量或剩余用量
+- 官方重置时间
+- 多额度组选择，例如通用额度与模型专属额度
+- 用量阈值提醒
+- 额外 credits 和额度重置次数，仅在实际可用时显示
+- 中英文界面、开机自动启动
 
-## 构建 & 运行
+Orb 默认在菜单栏显示 5 小时剩余用量。已有用户的手动选择会继续保留。
 
-标准 **Xcode App 工程**。
+## 构建与运行
+
+项目是标准 Xcode macOS App 工程，最低支持 macOS 13。
 
 ```bash
-open LLMUsageBar.xcodeproj   # 用 Xcode 打开，⌘R 运行（菜单栏出现 CX 文字）
+open LLMUsageBar.xcodeproj
 ```
-
-在 Xcode 里：选中 target → **Signing & Capabilities** 选你的 Team（本地运行用默认 "Sign to Run Locally" 即可），⌘R 运行、⌘B 构建，打包分发用 **Product → Archive**。
 
 命令行构建：
 
 ```bash
-xcodebuild -project LLMUsageBar.xcodeproj -scheme LLMUsageBar -configuration Release build
-# 产物在 ~/Library/Developer/Xcode/DerivedData/.../Build/Products/Release/LLMUsageBar.app
+xcodebuild \
+  -project LLMUsageBar.xcodeproj \
+  -scheme LLMUsageBar \
+  -configuration Release \
+  -derivedDataPath build/DerivedData \
+  build
 ```
 
-排查用文本模式（不弹菜单栏，打印后退出）：
+产物位于：
+
+```text
+build/DerivedData/Build/Products/Release/Orb.app
+```
+
+读取并打印一次当前数据，不启动菜单栏界面：
 
 ```bash
-/path/to/LLMUsageBar.app/Contents/MacOS/LLMUsageBar --once
+build/DerivedData/Build/Products/Release/Orb.app/Contents/MacOS/Orb --once
 ```
 
-> 工程文件由 [XcodeGen](https://github.com/yonsm/XcodeGen) 从 `project.yml` 生成（已 commit，clone 后可直接打开）。增删源文件后用 `xcodegen generate` 重新生成 `.xcodeproj`。
-
-退出：点菜单栏 → 退出（⌘Q）。
-
-## 设置
-
-菜单里「设置…」打开 `~/.config/llm-usage-bar/config.json`：
-
-```json
-{ "refreshSeconds": 60 }
-```
-
-Codex 读的是官方值，没什么要调的，主要就是刷新频率。
-
-## 开机自启（可选）
+工程文件由 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 根据 `project.yml` 生成。增删源文件后运行：
 
 ```bash
-mkdir -p ~/Library/LaunchAgents
-cat > ~/Library/LaunchAgents/local.llmusagebar.plist <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>local.llmusagebar</string>
-  <key>ProgramArguments</key><array><string>/Applications/LLMUsageBar.app/Contents/MacOS/LLMUsageBar</string></array>
-  <key>RunAtLoad</key><true/>
-</dict></plist>
-EOF
-launchctl load ~/Library/LaunchAgents/local.llmusagebar.plist
+xcodegen generate
 ```
 
-## 已知限制
+## 配置
 
-- **必须用官方 OpenAI Codex 套餐**才有官方额度。用自定义/中转供应商（如 aigocode）时，客户端不返回 `rate_limits`（为 null），此时只能显示本会话 token 总量。
-- 只在 Codex 客户端写过会话后才有数据；菜单栏显示的是最近一次会话的额度状态。
-- 仅读取本地客户端数据，网页版额度本地无数据，不在范围内。
+设置界面提供：
+
+- 开机自动启动
+- 刷新间隔
+- 用量提醒及阈值
+- 中文、英文切换
+
+配置保存在：
+
+```text
+~/.config/llm-usage-bar/config.json
+```
+
+## 隐私与数据
+
+Orb 不保存 ChatGPT 密码，也不要求单独登录。账户用量由本机已登录的 Codex App Server 获取；回退数据来自本机 Codex session 文件。Orb 不上传会话内容。
+
+## License
+
+[MIT](LICENSE)

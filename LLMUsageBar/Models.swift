@@ -93,6 +93,25 @@ struct UsageWindow {
     }
 }
 
+/// One official allowance bucket within a provider. Codex can expose a
+/// general allowance and additional model-specific buckets, each with its own
+/// reset windows. `id` is the server's stable limit_id and is persisted in
+/// Config so Orb never silently switches what the menu bar represents.
+struct UsageQuota {
+    var id: String
+    var name: String
+    var shortName: String
+    var windows: [UsageWindow]
+}
+
+struct UsageCredits {
+    var balance: String?
+    var hasCredits: Bool
+    var unlimited: Bool
+
+    var shouldDisplay: Bool { unlimited || hasCredits }
+}
+
 /// Everything we know about one provider (Claude Code / Codex).
 struct ProviderUsage {
     var providerID: UsageProviderID = .codex
@@ -100,10 +119,26 @@ struct ProviderUsage {
     var short: String          // "CC", "CX" — menu bar abbreviation
     var available: Bool        // did we find any data at all
     var windows: [UsageWindow]
+    var quotas: [UsageQuota] = []
     var note: String?          // e.g. data source path or a caveat
     var lastActivity: Date?    // newest activity timestamp — drives "currently in use"
     var sourceFile: URL?
     var plan: String?          // e.g. "Plus" — shown as auxiliary text in the header row
+    var credits: UsageCredits?
+    var resetCreditsAvailable: Int = 0
+
+    var effectiveQuotas: [UsageQuota] {
+        if !quotas.isEmpty { return quotas }
+        return [UsageQuota(id: providerID.rawValue, name: name, shortName: name, windows: windows)]
+    }
+
+    func selectedQuota(preferredID: String?) -> UsageQuota {
+        let available = effectiveQuotas
+        if let preferredID, let selected = available.first(where: { $0.id == preferredID }) {
+            return selected
+        }
+        return available.first(where: { $0.id == providerID.rawValue }) ?? available[0]
+    }
 
     /// The single most "urgent" percent — drives the menu bar. Windows with a
     /// real reset (5h, official limits) are preferred over rolling estimates so
@@ -124,33 +159,36 @@ struct ProviderUsage {
         return "–"
     }
 
-    var availableDisplayModes: [Config.MenuBarDisplayMode] {
+    func availableDisplayModes(quotaID: String? = nil) -> [Config.MenuBarDisplayMode] {
+        let quotaWindows = selectedQuota(preferredID: quotaID).windows
         var modes: [Config.MenuBarDisplayMode] = []
-        if windows.contains(where: { $0.kind == .weekly }) { modes.append(.weekly) }
-        if windows.contains(where: { $0.kind == .fiveHour }) { modes.append(.fiveHour) }
-        let fixedWindows = windows.filter { !$0.rolling && $0.percent != nil }
+        if quotaWindows.contains(where: { $0.kind == .weekly }) { modes.append(.weekly) }
+        if quotaWindows.contains(where: { $0.kind == .fiveHour }) { modes.append(.fiveHour) }
+        let fixedWindows = quotaWindows.filter { !$0.rolling && $0.percent != nil }
         if fixedWindows.count > 1 { modes.append(.highest) }
         if modes.isEmpty { modes.append(.highest) }
         return modes
     }
 
-    func effectiveDisplayMode(for preferred: Config.MenuBarDisplayMode) -> Config.MenuBarDisplayMode {
-        let modes = availableDisplayModes
+    func effectiveDisplayMode(for preferred: Config.MenuBarDisplayMode,
+                              quotaID: String? = nil) -> Config.MenuBarDisplayMode {
+        let modes = availableDisplayModes(quotaID: quotaID)
         if modes.contains(preferred) { return preferred }
         if modes.contains(.weekly) { return .weekly }
         if modes.contains(.fiveHour) { return .fiveHour }
         return .highest
     }
 
-    func window(for mode: Config.MenuBarDisplayMode) -> UsageWindow? {
+    func window(for mode: Config.MenuBarDisplayMode, quotaID: String? = nil) -> UsageWindow? {
+        let quotaWindows = selectedQuota(preferredID: quotaID).windows
         switch mode {
         case .highest:
-            return windows.filter { !$0.rolling }.max { $0.pct < $1.pct }
-                ?? windows.max { $0.pct < $1.pct }
+            return quotaWindows.filter { !$0.rolling }.max { $0.pct < $1.pct }
+                ?? quotaWindows.max { $0.pct < $1.pct }
         case .fiveHour:
-            return windows.first { $0.kind == .fiveHour }
+            return quotaWindows.first { $0.kind == .fiveHour }
         case .weekly:
-            return windows.first { $0.kind == .weekly }
+            return quotaWindows.first { $0.kind == .weekly }
         }
     }
 
@@ -159,9 +197,10 @@ struct ProviderUsage {
     }
 
     func menuBarValue(for mode: Config.MenuBarDisplayMode,
-                      percentMode: Config.PercentDisplayMode) -> String {
-        let mode = effectiveDisplayMode(for: mode)
-        guard let w = window(for: mode) else { return menuBarValue }
+                      percentMode: Config.PercentDisplayMode,
+                      quotaID: String? = nil) -> String {
+        let mode = effectiveDisplayMode(for: mode, quotaID: quotaID)
+        guard let w = window(for: mode, quotaID: quotaID) else { return menuBarValue }
         if let p = w.percent {
             let display = percentMode == .remaining ? 100 - p : p
             let text = "\(Int(display.rounded()))%"

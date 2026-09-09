@@ -28,7 +28,9 @@
 "limit.weekly" = "Weekly limit";
 
 "menu.menuBarMode.title" = "Limit";
+"menu.quota.title" = "Model";
 "provider.unsupported" = "Not supported yet";
+"quota.general" = "General";
 
 "menu.percentMode.title" = "Percentage";
 
@@ -76,3 +78,9 @@
 "status.unavailable" = "(No Data)";
 "status.updatedAt" = "Updated %@";
 "time.now" = "Now";
+
+"usage.credits.available" = "Available";
+"usage.credits.title" = "Credits";
+"usage.credits.unlimited" = "Unlimited";
+"usage.resetCredits.title" = "Limit resets";
+"usage.resetCredits.value" = "%d available";

@@ -52,7 +52,14 @@ enum CodexReader {
         // between session writes, so prefer that and fall back to the session data.
         let planFromAuth = authPlanType()
         let planFromSession = (latest.rateLimits?["plan_type"]).map { valueString($0) }
-        let plan: String? = (planFromAuth ?? planFromSession).map { planName($0) }
+        let plan = (planFromAuth ?? planFromSession).flatMap(planName)
+        let quotaID = (latest.rateLimits?["limit_id"] as? String) ?? "codex"
+        let localQuota = UsageQuota(
+            id: quotaID,
+            name: "quota.general".l10n,
+            shortName: "quota.general".l10n,
+            windows: windows
+        )
 
         if windows.isEmpty {
             // Provider didn't report limits — show local token total as a fallback.
@@ -63,6 +70,10 @@ enum CodexReader {
                 detail: detail, rolling: true))
             return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
                                  windows: windows,
+                                 quotas: [UsageQuota(id: quotaID,
+                                                     name: "quota.general".l10n,
+                                                     shortName: "quota.general".l10n,
+                                                     windows: windows)],
                                  note: "codex.note.rateLimitsEmpty".l10n,
                                  lastActivity: latest.timestamp,
                                  sourceFile: latest.sourceFile,
@@ -70,27 +81,35 @@ enum CodexReader {
         }
 
         return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
-                             windows: windows, note: nil, lastActivity: latest.timestamp,
+                             windows: windows, quotas: [localQuota], note: nil, lastActivity: latest.timestamp,
                              sourceFile: latest.sourceFile,
                              plan: plan)
     }
 
     private static func provider(from snapshot: CodexRateLimitSnapshot) -> ProviderUsage {
-        let reportedWindows: [(String, CodexRateLimitWindow?)] = [
-            ("limit.primary".l10n, snapshot.primary),
-            ("limit.secondary".l10n, snapshot.secondary)
-        ]
-        let windows = reportedWindows.compactMap { fallback, rateLimit -> UsageWindow? in
-            guard let rateLimit else { return nil }
-            return UsageWindow(
-                kind: windowKind(minutes: rateLimit.windowMinutes),
-                label: windowLabel(minutes: rateLimit.windowMinutes, fallback: fallback),
-                percent: rateLimit.usedPercent,
-                resetAt: rateLimit.resetAt,
-                detail: nil
-            )
+        let quotas = snapshot.groups.map { group -> UsageQuota in
+            let reportedWindows: [(String, CodexRateLimitWindow?)] = [
+                ("limit.primary".l10n, group.primary),
+                ("limit.secondary".l10n, group.secondary)
+            ]
+            let windows = reportedWindows.compactMap { fallback, rateLimit -> UsageWindow? in
+                guard let rateLimit else { return nil }
+                return UsageWindow(
+                    kind: windowKind(minutes: rateLimit.windowMinutes),
+                    label: windowLabel(minutes: rateLimit.windowMinutes, fallback: fallback),
+                    percent: rateLimit.usedPercent,
+                    resetAt: rateLimit.resetAt,
+                    detail: nil
+                )
+            }
+            let name = group.name ?? "quota.general".l10n
+            return UsageQuota(id: group.id,
+                              name: name,
+                              shortName: compactQuotaName(name),
+                              windows: windows)
         }
-        let plan = (snapshot.planType ?? authPlanType()).map(planName)
+        let windows = quotas.flatMap(\.windows)
+        let plan = (snapshot.groups.compactMap(\.planType).first ?? authPlanType()).flatMap(planName)
 
         return ProviderUsage(
             providerID: .codex,
@@ -98,11 +117,25 @@ enum CodexReader {
             short: "CX",
             available: !windows.isEmpty,
             windows: windows,
+            quotas: quotas,
             note: nil,
             lastActivity: snapshot.fetchedAt,
             sourceFile: nil,
-            plan: plan
+            plan: plan,
+            credits: snapshot.credits.map {
+                UsageCredits(balance: $0.balance,
+                             hasCredits: $0.hasCredits,
+                             unlimited: $0.unlimited)
+            },
+            resetCreditsAvailable: snapshot.resetCreditsAvailable
         )
+    }
+
+    private static func compactQuotaName(_ name: String) -> String {
+        switch name.lowercased() {
+        case "gpt-5.3-codex-spark": return "Codex Spark"
+        default: return name
+        }
     }
 
     /// The ChatGPT plan (e.g. "plus") is embedded as a claim in the id_token JWT
@@ -297,8 +330,21 @@ enum CodexReader {
         return String(describing: v)
     }
 
-    private static func planName(_ s: String) -> String {
-        s.lowercased() == "plus" ? "Plus" : s.capitalized
+    private static func planName(_ value: String) -> String? {
+        switch value.lowercased() {
+        case "free": return "Free"
+        case "go": return "Go"
+        case "plus": return "Plus"
+        case "pro", "prolite": return "Pro"
+        case "team", "self_serve_business_prolite", "self_serve_business_usage_based", "business":
+            return "Business"
+        case "ent26", "enterprise_cbp_automation", "enterprise_cbp_usage_based", "enterprise":
+            return "Enterprise"
+        case "edu", "edu_plus", "edu_pro": return "Edu"
+        case "unknown", "": return nil
+        default:
+            return value.split(separator: "_").map { $0.capitalized }.joined(separator: " ")
+        }
     }
 
     private static func numberString(_ d: Double) -> String {

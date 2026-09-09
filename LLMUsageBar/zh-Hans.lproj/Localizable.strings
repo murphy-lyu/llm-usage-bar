@@ -28,7 +28,9 @@
 "limit.weekly" = "每周上限";
 
 "menu.menuBarMode.title" = "显示内容";
+"menu.quota.title" = "模型";
 "provider.unsupported" = "暂未支持";
+"quota.general" = "通用";
 
 "menu.percentMode.title" = "显示方式";
 
@@ -76,3 +78,9 @@
 "status.unavailable" = "（无数据）";
 "status.updatedAt" = "更新于 %@";
 "time.now" = "现在";
+
+"usage.credits.available" = "可用";
+"usage.credits.title" = "额外额度";
+"usage.credits.unlimited" = "不限量";
+"usage.resetCredits.title" = "额度重置";
+"usage.resetCredits.value" = "%d 次可用";
