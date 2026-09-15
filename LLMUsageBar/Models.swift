@@ -199,14 +199,27 @@ struct ProviderUsage {
     func menuBarValue(for mode: Config.MenuBarDisplayMode,
                       percentMode: Config.PercentDisplayMode,
                       quotaID: String? = nil) -> String {
+        if let exhausted = recoveryWindow(quotaID: quotaID), let reset = exhausted.resetAt {
+            let formatter = DateFormatter()
+            formatter.locale = .autoupdatingCurrent
+            formatter.setLocalizedDateFormatFromTemplate(
+                Calendar.autoupdatingCurrent.isDateInToday(reset) ? "jm" : "Md")
+            return "\(exhausted.menuBarPrefix) ↻ \(formatter.string(from: reset))"
+        }
         let mode = effectiveDisplayMode(for: mode, quotaID: quotaID)
         guard let w = window(for: mode, quotaID: quotaID) else { return menuBarValue }
         if let p = w.percent {
             let display = percentMode == .remaining ? 100 - p : p
             let text = "\(Int(display.rounded()))%"
-            return "\(w.menuBarPrefix) \(text)"
+            return "\(w.menuBarPrefix) · \(text)"
         }
         return menuBarValue
+    }
+
+    func recoveryWindow(quotaID: String? = nil, now: Date = Date()) -> UsageWindow? {
+        selectedQuota(preferredID: quotaID).windows.filter {
+            !$0.rolling && ($0.percent ?? 0) >= 100 && ($0.resetAt ?? .distantPast) > now
+        }.max { ($0.resetAt ?? .distantPast) < ($1.resetAt ?? .distantPast) }
     }
 
 }

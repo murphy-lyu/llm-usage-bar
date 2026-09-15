@@ -379,6 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateTitle(_ p: ProviderUsage) {
         guard let button = statusItem.button else { return }
         guard p.available else {
+            button.toolTip = nil
             button.attributedTitle = NSAttributedString(string: "\(p.name) ⚠︎", attributes: [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: NSColor.secondaryLabelColor])
@@ -386,7 +387,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let quotaID = config.selectedQuotaID(for: p.providerID)
         let mode = p.effectiveDisplayMode(for: config.menuBarDisplayMode, quotaID: quotaID)
-        let selected = p.window(for: mode, quotaID: quotaID)
+        let recovery = p.recoveryWindow(quotaID: quotaID)
+        let selected = recovery ?? p.window(for: mode, quotaID: quotaID)
+        if let recovery, let reset = recovery.resetAt {
+            let formatter = DateFormatter()
+            formatter.locale = .autoupdatingCurrent
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            button.toolTip = String(format: "status.recovery".l10n,
+                                    recovery.label, formatter.string(from: reset))
+        } else {
+            button.toolTip = nil
+        }
         let pct = selected?.percent ?? p.headlinePercent ?? 0
         let color: NSColor = selected?.percent == nil && p.headlinePercent == nil ? .labelColor
             : pct >= 90 ? .systemRed : pct >= 75 ? .systemOrange : .labelColor
