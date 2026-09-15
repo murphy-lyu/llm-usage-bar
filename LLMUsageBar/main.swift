@@ -318,6 +318,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var sessionWatcherFD: CInt = -1
     private var watchedSessionPath: URL?
     private var refreshDebounce: DispatchWorkItem?
+    private var refreshInFlight = false
+    private var refreshPending = false
+    private var configRevision = 0
     private var hasAlertBaseline = false
     private var lastPercents: [String: Double] = [:]
     private var lastProvider: ProviderUsage?
@@ -359,11 +362,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Reads all data on a background queue and only touches the UI on main —
     /// file I/O must never block the main thread, or the menu lags on click.
     private func refresh() {
+        precondition(Thread.isMainThread)
+        guard !refreshInFlight else {
+            refreshPending = true
+            return
+        }
+        refreshInFlight = true
+        let revision = configRevision
         ioQueue.async { [weak self] in
             let cfg = Config.load()
             let provider = UsageProviderRegistry.adapter(for: cfg.providerID).read(config: cfg)
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.refreshInFlight = false
+                guard revision == self.configRevision else {
+                    self.refreshPending = true
+                    self.finishRefresh()
+                    return
+                }
                 self.config = cfg
                 self.lastProvider = provider
                 self.updateTitle(provider)
@@ -372,8 +388,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.delegate = self
                 self.statusItem.menu = menu
                 self.scheduleSessionWatcher(for: provider.sourceFile)
+                self.finishRefresh()
             }
         }
+    }
+
+    private func finishRefresh() {
+        guard refreshPending else { return }
+        refreshPending = false
+        DispatchQueue.main.async { [weak self] in self?.refresh() }
     }
 
     private func updateTitle(_ p: ProviderUsage) {
@@ -762,6 +785,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsOpener = SettingsOpener { [weak self] next in
                 guard let self else { return }
                 self.config = next
+                self.configRevision += 1
                 next.save()
                 if next.thresholdAlertsEnabled {
                     NotificationManager.shared.requestIfNeeded()
@@ -799,6 +823,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let quotaID = sender.representedObject as? String,
               let provider = lastProvider else { return }
         config.selectQuota(quotaID, for: provider.providerID)
+        configRevision += 1
         config.save()
         updateTitle(provider)
         rebuildMenu(provider)
@@ -807,6 +832,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func selectMenuBarMode(_ mode: Config.MenuBarDisplayMode) {
         config.menuBarDisplayMode = mode
+        configRevision += 1
         config.save()
         if let provider = lastProvider {
             updateTitle(provider)
@@ -817,6 +843,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func selectPercentMode(_ mode: Config.PercentDisplayMode) {
         config.percentDisplayMode = mode
+        configRevision += 1
         config.save()
         if let provider = lastProvider {
             updateTitle(provider)

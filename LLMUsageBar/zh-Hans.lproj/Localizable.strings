@@ -8,6 +8,7 @@
 "alert.title.remaining" = "用量剩余 %d%%";
 "alert.title.used" = "用量已使用 %d%%";
 "status.recovery" = "%@ 已用尽，将于 %@ 重置。";
+"status.stale" = "等待最新用量数据";
 
 "codex.detail.noOfficialLimits" = "无官方上限数据";
 "codex.note.rateLimitsEmpty" = "当前供应商未返回官方上限（rate_limits 为空）";

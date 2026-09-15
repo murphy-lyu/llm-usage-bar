@@ -8,6 +8,7 @@
 "alert.title.remaining" = "%d%% usage remaining";
 "alert.title.used" = "%d%% usage used";
 "status.recovery" = "%@ exhausted. Resets at %@.";
+"status.stale" = "Waiting for fresh usage data";
 
 "codex.detail.noOfficialLimits" = "No official limit data";
 "codex.note.rateLimitsEmpty" = "The current provider did not return official limits (rate_limits is empty)";

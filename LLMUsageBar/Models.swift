@@ -213,7 +213,7 @@ struct ProviderUsage {
             let text = "\(Int(display.rounded()))%"
             return "\(w.menuBarPrefix) · \(text)"
         }
-        return menuBarValue
+        return "\(w.menuBarPrefix) · —"
     }
 
     func recoveryWindow(quotaID: String? = nil, now: Date = Date()) -> UsageWindow? {

@@ -13,6 +13,9 @@ struct RecoveryDisplayTests {
         ])
         assert(provider.menuBarValue(for: .fiveHour, percentMode: .remaining) == "5h · 19%")
         assert(provider.menuBarValue(for: .fiveHour, percentMode: .used) == "5h · 81%")
+        provider.windows[0].percent = nil
+        provider.windows[0].detail = "Waiting for fresh usage data"
+        assert(provider.menuBarValue(for: .fiveHour, percentMode: .remaining) == "5h · —")
         provider.windows[0].percent = 100
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
