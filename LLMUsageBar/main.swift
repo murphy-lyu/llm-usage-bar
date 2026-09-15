@@ -861,7 +861,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         ? "\(quota.shortName) · \(window.label)"
                         : window.label
                     NotificationManager.shared.notifyLimit(label: label,
-                                                           percent: Int(percent.rounded()),
+                                                           percent: Int(window.displayPercent(for: config.percentDisplayMode).rounded()),
+                                                           percentMode: config.percentDisplayMode,
                                                            level: "\(windowKey)-\(level)")
                 }
                 lastPercents[windowKey] = percent

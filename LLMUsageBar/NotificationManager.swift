@@ -13,9 +13,10 @@ final class NotificationManager {
         }
     }
 
-    func notifyLimit(label: String, percent: Int, level: String) {
+    func notifyLimit(label: String, percent: Int, percentMode: Config.PercentDisplayMode, level: String) {
         let content = UNMutableNotificationContent()
-        content.title = String(format: "alert.title".l10n, percent)
+        let titleKey = percentMode == .remaining ? "alert.title.remaining" : "alert.title.used"
+        content.title = String(format: titleKey.l10n, percent)
         content.body = String(format: "alert.body".l10n, label)
         content.sound = .default
 
