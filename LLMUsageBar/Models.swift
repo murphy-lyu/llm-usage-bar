@@ -200,11 +200,7 @@ struct ProviderUsage {
                       percentMode: Config.PercentDisplayMode,
                       quotaID: String? = nil) -> String {
         if let exhausted = recoveryWindow(quotaID: quotaID), let reset = exhausted.resetAt {
-            let formatter = DateFormatter()
-            formatter.locale = .autoupdatingCurrent
-            formatter.setLocalizedDateFormatFromTemplate(
-                Calendar.autoupdatingCurrent.isDateInToday(reset) ? "jm" : "Md")
-            return "\(exhausted.menuBarPrefix) ↻ \(formatter.string(from: reset))"
+            return "\(exhausted.menuBarPrefix) ↻ \(exhausted.compactResetText(reset))"
         }
         let mode = effectiveDisplayMode(for: mode, quotaID: quotaID)
         guard let w = window(for: mode, quotaID: quotaID) else { return menuBarValue }
@@ -224,7 +220,7 @@ struct ProviderUsage {
 
 }
 
-private extension UsageWindow {
+extension UsageWindow {
     var menuBarPrefix: String {
         switch kind {
         case .fiveHour: return "5h"
@@ -233,6 +229,13 @@ private extension UsageWindow {
         case .monthly: return "30d"
         default: return label
         }
+    }
+
+    func compactResetText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate(kind == .fiveHour ? "jm" : "MMM d")
+        return formatter.string(from: date)
     }
 }
 

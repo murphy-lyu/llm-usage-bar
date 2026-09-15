@@ -663,14 +663,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         line.append(NSAttributedString(string: pctText, attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)]))
 
-        // Match Codex's official compact reset display: time for same-day
-        // windows, date for longer windows.
+        // Match Codex's official display: time for 5-hour limits and a date for
+        // longer limits, including when a 5-hour reset crosses midnight.
         var tail: [String] = []
         if !w.rolling, let r = w.resetAt {
             if r.timeIntervalSinceNow <= 0 {
                 tail.append("time.now".l10n)
             } else if lastProvider?.providerID == .codex {
-                tail.append(codexResetText(r))
+                tail.append(w.compactResetText(r))
             } else {
                 tail.append(String(format: "status.reset".l10n, r.coarseCountdown()))
             }
@@ -694,17 +694,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         line.addAttribute(.paragraphStyle, value: paragraph,
                           range: NSRange(location: secondLineStart, length: line.length - secondLineStart))
         return line
-    }
-
-    private func codexResetText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        if Calendar.current.isDateInToday(date) {
-            formatter.setLocalizedDateFormatFromTemplate("jm")
-        } else {
-            formatter.setLocalizedDateFormatFromTemplate("MMM d")
-        }
-        return formatter.string(from: date)
     }
 
     private func displayPercentFormat() -> String {

@@ -24,9 +24,15 @@ struct RecoveryDisplayTests {
         let expected = "5h ↻ \(formatter.string(from: soon))"
         assert(provider.menuBarValue(for: .weekly, percentMode: .used) == expected)
         assert(provider.menuBarValue(for: .fiveHour, percentMode: .remaining) == expected)
+        let tomorrow = Calendar.autoupdatingCurrent.date(byAdding: .day, value: 1, to: now)!
+        provider.windows[0].resetAt = tomorrow
+        formatter.setLocalizedDateFormatFromTemplate("jm")
+        assert(provider.menuBarValue(for: .fiveHour, percentMode: .remaining)
+               == "5h ↻ \(formatter.string(from: tomorrow))")
+        provider.windows[0].resetAt = soon
         provider.windows[1].percent = 100
         assert(provider.recoveryWindow(now: now)?.kind == .weekly)
-        formatter.setLocalizedDateFormatFromTemplate("Md")
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
         assert(provider.menuBarValue(for: .fiveHour, percentMode: .remaining)
                == "W ↻ \(formatter.string(from: later))")
         provider.windows[1].resetAt = nil
