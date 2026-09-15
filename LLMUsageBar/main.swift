@@ -1,5 +1,11 @@
 import AppKit
 
+private enum OrbTheme {
+    static var accent: NSColor {
+        NSColor(named: "AccentColor") ?? .controlAccentColor
+    }
+}
+
 /// A title/value row for an interactive NSMenuItem (has a submenu), laid out
 /// with AutoLayout so the value's right edge is an exact constraint against
 /// `width` rather than a guessed NSMenuItem tab-stop position. Draws its own
@@ -100,7 +106,7 @@ private final class MenuValueRowView: NSView {
         highlightView.isHidden = !highlighted
         if highlighted {
             highlightView.frame = bounds.insetBy(dx: 5, dy: 1)
-            highlightView.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+            highlightView.layer?.backgroundColor = OrbTheme.accent.cgColor
         }
         titleLabel.textColor = highlighted ? .white : .labelColor
         valueLabel.textColor = highlighted ? .white : .secondaryLabelColor
@@ -153,7 +159,7 @@ private final class HeaderRowView: NSView {
 
         let titleLabel = NSTextField(labelWithString: title)
         titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
-        titleLabel.textColor = accent ? .controlAccentColor : .labelColor
+        titleLabel.textColor = accent ? OrbTheme.accent : .labelColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -171,13 +177,13 @@ private final class HeaderRowView: NSView {
         let planBadge = NSView()
         planBadge.wantsLayer = true
         planBadge.layer?.cornerRadius = 4
-        planBadge.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.14).cgColor
+        planBadge.layer?.backgroundColor = OrbTheme.accent.withAlphaComponent(0.14).cgColor
         planBadge.translatesAutoresizingMaskIntoConstraints = false
         addSubview(planBadge)
 
         let planLabel = NSTextField(labelWithString: plan)
         planLabel.font = .systemFont(ofSize: 11, weight: .semibold)
-        planLabel.textColor = .controlAccentColor
+        planLabel.textColor = OrbTheme.accent
         planLabel.lineBreakMode = .byTruncatingTail
         planLabel.translatesAutoresizingMaskIntoConstraints = false
         planBadge.addSubview(planLabel)
@@ -225,12 +231,12 @@ private final class UsageWindowPickerView: NSView {
         // hierarchy), so re-enabling is just uncommenting this block.
         // selectionView.wantsLayer = true
         // selectionView.layer?.cornerRadius = 7
-        // selectionView.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.08).cgColor
+        // selectionView.layer?.backgroundColor = OrbTheme.accent.withAlphaComponent(0.08).cgColor
         // addSubview(selectionView)
 
         // accentView.wantsLayer = true
         // accentView.layer?.cornerRadius = 1.5
-        // accentView.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        // accentView.layer?.backgroundColor = OrbTheme.accent.cgColor
         // selectionView.addSubview(accentView)
 
         rebuildRows(items: items, width: width, leftPad: leftPad, topPad: topPad)
