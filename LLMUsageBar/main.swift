@@ -148,6 +148,75 @@ private final class AuxiliaryValueRowView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
+/// A compact disclosure row for account metadata. It follows the visual weight
+/// of auxiliary rows while still exposing per-credit details in a submenu.
+private final class AuxiliaryDisclosureRowView: NSView {
+    private let highlightView = NSView()
+    private let titleLabel: NSTextField
+    private let valueLabel: NSTextField
+    private let chevron: NSImageView
+
+    init(title: String, value: String, width: CGFloat) {
+        titleLabel = NSTextField(labelWithString: title)
+        valueLabel = NSTextField(labelWithString: value)
+        chevron = NSImageView(image: NSImage(
+            systemSymbolName: "chevron.right", accessibilityDescription: nil) ?? NSImage())
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
+
+        highlightView.wantsLayer = true
+        highlightView.layer?.cornerRadius = 5
+        highlightView.isHidden = true
+        addSubview(highlightView)
+
+        titleLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        titleLabel.textColor = .secondaryLabelColor
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valueLabel.textColor = .secondaryLabelColor
+        valueLabel.alignment = .right
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(valueLabel)
+
+        chevron.contentTintColor = .tertiaryLabelColor
+        chevron.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(chevron)
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
+            valueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -7),
+            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
+            chevron.widthAnchor.constraint(equalToConstant: 6),
+            chevron.heightAnchor.constraint(equalToConstant: 10)
+        ])
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        return bounds.contains(local) ? self : nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let highlighted = enclosingMenuItem?.isHighlighted ?? false
+        highlightView.isHidden = !highlighted
+        if highlighted {
+            highlightView.frame = bounds.insetBy(dx: 5, dy: 1)
+            highlightView.layer?.backgroundColor = OrbTheme.accent.cgColor
+        }
+        titleLabel.textColor = highlighted ? .white : .secondaryLabelColor
+        valueLabel.textColor = highlighted ? .white : .secondaryLabelColor
+        chevron.contentTintColor = highlighted ? .white : .tertiaryLabelColor
+        super.draw(dirtyRect)
+    }
+}
+
 /// The top title row (e.g. "Codex"), with an optional right-aligned auxiliary
 /// value (e.g. the plan name) laid out against a fixed `width` so it lines up
 /// with the rest of the panel. Non-interactive: full-color text, no highlight.
@@ -464,11 +533,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                        width: menuWidth))
                 }
             }
-            let extras = accountExtras(for: p)
-            if !extras.isEmpty {
+            let credits = creditsExtra(for: p)
+            let resets = p.resetCredits.flatMap { $0.availableCount > 0 ? $0 : nil }
+            if credits != nil || resets != nil {
                 menu.addItem(.separator())
-                for extra in extras {
-                    menu.addItem(auxiliaryRow(extra.title, value: extra.value, width: menuWidth))
+                if let credits {
+                    menu.addItem(auxiliaryRow(credits.title, value: credits.value, width: menuWidth))
+                }
+                if let resets {
+                    menu.addItem(resetCreditsRow(resets, width: menuWidth))
                 }
             }
             menu.addItem(.separator())
@@ -512,8 +585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    private func accountExtras(for provider: ProviderUsage) -> [(title: String, value: String)] {
-        var extras: [(String, String)] = []
+    private func creditsExtra(for provider: ProviderUsage) -> (title: String, value: String)? {
         if let credits = provider.credits, credits.shouldDisplay {
             let value: String
             if credits.unlimited {
@@ -523,15 +595,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } else {
                 value = "usage.credits.available".l10n
             }
-            extras.append(("usage.credits.title".l10n, value))
+            return ("usage.credits.title".l10n, value)
         }
-        if provider.resetCreditsAvailable > 0 {
-            extras.append((
+        return nil
+    }
+
+    private func resetCreditsRow(_ resets: UsageResetCredits, width: CGFloat) -> NSMenuItem {
+        guard let credits = resets.credits, !credits.isEmpty else {
+            return auxiliaryRow(
                 "usage.resetCredits.title".l10n,
-                String(format: "usage.resetCredits.value".l10n, provider.resetCreditsAvailable)
-            ))
+                value: String(format: "usage.resetCredits.value".l10n, resets.availableCount),
+                width: width)
         }
-        return extras
+        let item = NSMenuItem(title: "usage.resetCredits.title".l10n,
+                              action: nil, keyEquivalent: "")
+        item.view = AuxiliaryDisclosureRowView(
+            title: "usage.resetCredits.title".l10n,
+            value: String(format: "usage.resetCredits.value".l10n, resets.availableCount),
+            width: width)
+        let submenu = NSMenu()
+        let sorted = credits.sorted {
+            ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture)
+        }
+        for (index, credit) in sorted.enumerated() {
+            let title = credit.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rowTitle = title.flatMap { $0.isEmpty ? nil : $0 }
+                ?? String(format: "usage.resetCredits.item".l10n, index + 1)
+            let value: String
+            if let expiry = credit.expiresAt {
+                let formatter = DateFormatter()
+                formatter.locale = .autoupdatingCurrent
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                value = formatter.string(from: expiry)
+            } else {
+                value = "usage.resetCredits.noExpiry".l10n
+            }
+            submenu.addItem(auxiliaryRow(rowTitle, value: value, width: width))
+        }
+        if resets.availableCount > sorted.count {
+            submenu.addItem(auxiliaryRow(
+                "usage.resetCredits.detailsUnavailable".l10n,
+                value: String(resets.availableCount - sorted.count),
+                width: width))
+        }
+        item.submenu = submenu
+        return item
     }
 
     private func contentWidth() -> CGFloat {
@@ -978,9 +1087,8 @@ if CommandLine.arguments.contains("--once") {
         .map { URL(fileURLWithPath: $0) }
     let p = CodexReader.read(config: cfg, overrideFile: override)
     print("== \(p.name)  available=\(p.available)  headline=\(p.headlinePercent.map { String(format: "%.1f%%", $0) } ?? "nil")  plan=\(p.plan ?? "nil")")
-    if let credits = p.credits {
-        print("   credits=\(credits.balance ?? "nil") hasCredits=\(credits.hasCredits) unlimited=\(credits.unlimited) resets=\(p.resetCreditsAvailable)")
-    }
+    let credits = p.credits
+    print("   credits=\(credits?.balance ?? "nil") hasCredits=\(credits?.hasCredits ?? false) unlimited=\(credits?.unlimited ?? false) resets=\(p.resetCredits?.availableCount ?? 0) expiry=\(p.resetCredits?.nextExpiry?.description ?? "unknown")")
     let selectedQuotaID = cfg.selectedQuotaID(for: p.providerID)
     let selectedQuota = p.selectedQuota(preferredID: selectedQuotaID)
     let selectedMode = p.effectiveDisplayMode(for: cfg.menuBarDisplayMode,

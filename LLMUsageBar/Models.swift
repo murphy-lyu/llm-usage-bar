@@ -109,7 +109,42 @@ struct UsageCredits {
     var hasCredits: Bool
     var unlimited: Bool
 
-    var shouldDisplay: Bool { unlimited || hasCredits }
+    var shouldDisplay: Bool {
+        if unlimited { return true }
+        guard let balance = balance?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !balance.isEmpty else { return hasCredits }
+        guard let amount = Decimal(string: balance,
+                                   locale: Locale(identifier: "en_US_POSIX")) else {
+            // The backend is authoritative when it reports an unfamiliar
+            // localized balance format together with hasCredits=true.
+            return hasCredits
+        }
+        return amount > 0
+    }
+}
+
+struct UsageResetCredit {
+    var id: String
+    var grantedAt: Date
+    var expiresAt: Date?
+    var title: String?
+    var detail: String?
+}
+
+struct UsageResetCredits {
+    var availableCount: Int
+    /// `nil` means the backend only supplied a count. An array means credit
+    /// details were supplied, even when that array is empty.
+    var credits: [UsageResetCredit]?
+
+    var nextExpiry: Date? {
+        credits?.compactMap(\.expiresAt).min()
+    }
+
+    var creditsDoNotExpire: Bool {
+        guard let credits, !credits.isEmpty else { return false }
+        return credits.allSatisfy { $0.expiresAt == nil }
+    }
 }
 
 /// Everything we know about one provider (Claude Code / Codex).
@@ -125,7 +160,7 @@ struct ProviderUsage {
     var sourceFile: URL?
     var plan: String?          // e.g. "Plus" — shown as auxiliary text in the header row
     var credits: UsageCredits?
-    var resetCreditsAvailable: Int = 0
+    var resetCredits: UsageResetCredits?
 
     var effectiveQuotas: [UsageQuota] {
         if !quotas.isEmpty { return quotas }

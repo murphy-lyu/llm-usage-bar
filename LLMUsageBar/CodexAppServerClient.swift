@@ -20,10 +20,23 @@ struct CodexCreditsSnapshot {
     var unlimited: Bool
 }
 
+struct CodexResetCreditSnapshot {
+    var id: String
+    var grantedAt: Date
+    var expiresAt: Date?
+    var title: String?
+    var description: String?
+}
+
+struct CodexResetCreditsSnapshot {
+    var availableCount: Int
+    var credits: [CodexResetCreditSnapshot]?
+}
+
 struct CodexRateLimitSnapshot {
     var groups: [CodexRateLimitGroup]
     var credits: CodexCreditsSnapshot?
-    var resetCreditsAvailable: Int
+    var resetCredits: CodexResetCreditsSnapshot?
     var fetchedAt: Date
 }
 
@@ -46,6 +59,7 @@ enum CodexAppServerClient {
     /// persistent connection is both faster and substantially less wasteful.
     private final class Connection {
         private let lock = NSLock()
+        private let handlerLock = NSLock()
         private var process: Process?
         private var inputHandle: FileHandle?
         private var reader: JSONLineResponseReader?
@@ -53,9 +67,9 @@ enum CodexAppServerClient {
         private var rateLimitsUpdateHandler: (() -> Void)?
 
         func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
-            lock.lock()
+            handlerLock.lock()
             rateLimitsUpdateHandler = handler
-            lock.unlock()
+            handlerLock.unlock()
         }
 
         func readRateLimits() -> CodexRateLimitSnapshot? {
@@ -141,9 +155,9 @@ enum CodexAppServerClient {
         }
 
         private func notifyRateLimitsUpdated() {
-            lock.lock()
+            handlerLock.lock()
             let handler = rateLimitsUpdateHandler
-            lock.unlock()
+            handlerLock.unlock()
             handler?()
         }
 
@@ -186,7 +200,7 @@ enum CodexAppServerClient {
         try handle.write(contentsOf: data)
     }
 
-    private static func snapshot(from response: [String: Any]) -> CodexRateLimitSnapshot? {
+    static func snapshot(from response: [String: Any]) -> CodexRateLimitSnapshot? {
         guard let result = response["result"] as? [String: Any] else { return nil }
 
         let direct = result["rateLimits"] as? [String: Any]
@@ -217,15 +231,40 @@ enum CodexAppServerClient {
                 guard let raw = byID[group.id] as? [String: Any] else { return nil }
                 return creditsSnapshot(raw)
             }.first
-        let resetCredits = result["rateLimitResetCredits"] as? [String: Any]
-        let resetCreditsAvailable = Int(number(resetCredits?["availableCount"]) ?? 0)
+        let resetCredits = resetCreditsSnapshot(result["rateLimitResetCredits"])
 
         return CodexRateLimitSnapshot(
             groups: groups,
             credits: credits,
-            resetCreditsAvailable: max(0, resetCreditsAvailable),
+            resetCredits: resetCredits,
             fetchedAt: Date()
         )
+    }
+
+    private static func resetCreditsSnapshot(_ value: Any?) -> CodexResetCreditsSnapshot? {
+        guard let object = value as? [String: Any],
+              let count = number(object["availableCount"]) else { return nil }
+        let credits: [CodexResetCreditSnapshot]?
+        if object["credits"] == nil || object["credits"] is NSNull {
+            credits = nil
+        } else if let rows = object["credits"] as? [[String: Any]] {
+            let available: [CodexResetCreditSnapshot] = rows.compactMap { row in
+                guard (row["status"] as? String) == "available",
+                      let id = row["id"] as? String,
+                      let grantedAt = number(row["grantedAt"]) else { return nil }
+                return CodexResetCreditSnapshot(
+                    id: id,
+                    grantedAt: Date(timeIntervalSince1970: grantedAt),
+                    expiresAt: number(row["expiresAt"]).map(Date.init(timeIntervalSince1970:)),
+                    title: row["title"] as? String,
+                    description: row["description"] as? String
+                )
+            }
+            credits = Array(available.prefix(max(0, Int(count))))
+        } else {
+            credits = nil
+        }
+        return CodexResetCreditsSnapshot(availableCount: max(0, Int(count)), credits: credits)
     }
 
     private static func rateLimitGroup(from limits: [String: Any],

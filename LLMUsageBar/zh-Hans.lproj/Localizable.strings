@@ -87,3 +87,6 @@
 "usage.credits.unlimited" = "不限量";
 "usage.resetCredits.title" = "额度重置";
 "usage.resetCredits.value" = "%d 次可用";
+"usage.resetCredits.noExpiry" = "无到期时间";
+"usage.resetCredits.item" = "Reset %d";
+"usage.resetCredits.detailsUnavailable" = "详情未提供";

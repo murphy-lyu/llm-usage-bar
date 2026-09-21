@@ -87,3 +87,6 @@
 "usage.credits.unlimited" = "Unlimited";
 "usage.resetCredits.title" = "Limit resets";
 "usage.resetCredits.value" = "%d available";
+"usage.resetCredits.noExpiry" = "No expiry";
+"usage.resetCredits.item" = "Reset %d";
+"usage.resetCredits.detailsUnavailable" = "Details unavailable";

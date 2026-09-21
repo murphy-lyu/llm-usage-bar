@@ -126,7 +126,18 @@ enum CodexReader {
                              hasCredits: $0.hasCredits,
                              unlimited: $0.unlimited)
             },
-            resetCreditsAvailable: snapshot.resetCreditsAvailable
+            resetCredits: snapshot.resetCredits.map { summary in
+                UsageResetCredits(
+                    availableCount: summary.availableCount,
+                    credits: summary.credits?.map {
+                        UsageResetCredit(id: $0.id,
+                                         grantedAt: $0.grantedAt,
+                                         expiresAt: $0.expiresAt,
+                                         title: $0.title,
+                                         detail: $0.description)
+                    }
+                )
+            }
         )
     }
 
