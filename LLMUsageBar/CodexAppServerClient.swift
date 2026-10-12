@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct CodexRateLimitWindow {
     var usedPercent: Double
@@ -44,6 +45,8 @@ struct CodexRateLimitSnapshot {
 /// The app-server performs the authenticated account lookup, so usage from
 /// another computer is visible without waiting for a local session write.
 enum CodexAppServerClient {
+    private static let logger = Logger(subsystem: "local.llmusagebar",
+                                       category: "CodexAppServer")
     private static let connection = Connection()
 
     static func readRateLimits() -> CodexRateLimitSnapshot? {
@@ -80,16 +83,28 @@ enum CodexAppServerClient {
         func readRateLimits() -> CodexRateLimitSnapshot? {
             lock.lock()
             defer { lock.unlock() }
+            let startedAt = Date()
 
             // Recover once before falling back to local session data. This
             // covers app updates, sleep/wake, broken pipes, and transient
             // initialization failures without repeatedly spawning processes.
-            for _ in 0..<2 {
+            for attempt in 1...2 {
                 if let snapshot = readRateLimitsOnce() {
+                    let elapsed = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                    CodexAppServerClient.logger.info(
+                        "Read succeeded attempt=\(attempt, privacy: .public) elapsed_ms=\(elapsed, privacy: .public)"
+                    )
                     return snapshot
                 }
+                CodexAppServerClient.logger.notice(
+                    "Read failed attempt=\(attempt, privacy: .public); restarting connection"
+                )
                 stop()
             }
+            let elapsed = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            CodexAppServerClient.logger.error(
+                "Read unavailable after retry elapsed_ms=\(elapsed, privacy: .public)"
+            )
             return nil
         }
 
@@ -102,7 +117,10 @@ enum CodexAppServerClient {
         private func readRateLimitsOnce() -> CodexRateLimitSnapshot? {
             guard ensureStarted(),
                   let inputHandle,
-                  let reader else { return nil }
+                  let reader else {
+                CodexAppServerClient.logger.error("Connection initialization failed")
+                return nil
+            }
 
             let requestID = nextRequestID
             nextRequestID += 1
@@ -112,18 +130,30 @@ enum CodexAppServerClient {
                     "id": requestID,
                     "params": [:]
                 ], to: inputHandle)
-                guard let response = reader.waitForResponse(id: requestID, timeout: 7),
-                      let snapshot = snapshot(from: response) else {
+                guard let response = reader.waitForResponse(id: requestID, timeout: 7) else {
+                    CodexAppServerClient.logger.error(
+                        "Rate-limit request ended without a response request_id=\(requestID, privacy: .public)"
+                    )
+                    return nil
+                }
+                guard let snapshot = snapshot(from: response) else {
+                    CodexAppServerClient.logger.error(
+                        "Rate-limit response was missing usable windows request_id=\(requestID, privacy: .public)"
+                    )
                     return nil
                 }
                 return snapshot
             } catch {
+                CodexAppServerClient.logger.error(
+                    "Rate-limit request write failed: \(error.localizedDescription, privacy: .private)"
+                )
                 return nil
             }
         }
 
         private func ensureStarted() -> Bool {
             guard let executable = executable() else {
+                CodexAppServerClient.logger.error("No executable Codex CLI was found")
                 stop()
                 return false
             }
@@ -132,6 +162,11 @@ enum CodexAppServerClient {
                reader != nil,
                runningExecutable == executable.identity {
                 return true
+            }
+            if process?.isRunning == true, runningExecutable != executable.identity {
+                CodexAppServerClient.logger.notice(
+                    "Codex CLI changed on disk; replacing the running app-server"
+                )
             }
             stop()
 
@@ -175,6 +210,7 @@ enum CodexAppServerClient {
                     ]
                 ], to: inputPipe.fileHandleForWriting)
                 guard reader.waitForResponse(id: 1, timeout: 3) != nil else {
+                    CodexAppServerClient.logger.error("App-server initialization timed out or closed")
                     stop()
                     return false
                 }
@@ -182,6 +218,9 @@ enum CodexAppServerClient {
                           to: inputPipe.fileHandleForWriting)
                 return true
             } catch {
+                CodexAppServerClient.logger.error(
+                    "App-server launch failed: \(error.localizedDescription, privacy: .private)"
+                )
                 stop()
                 return false
             }
@@ -200,6 +239,10 @@ enum CodexAppServerClient {
             process = nil
             runningExecutable = nil
             lock.unlock()
+
+            CodexAppServerClient.logger.notice(
+                "App-server exited status=\(terminated.terminationStatus, privacy: .public)"
+            )
 
             // Reconnect promptly instead of waiting for the polling timer.
             notifyRateLimitsUpdated()

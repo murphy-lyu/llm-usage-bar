@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Reads Codex session rollouts (~/.codex/sessions/YYYY/MM/DD/*.jsonl).
 /// Codex persists OFFICIAL rate limits in `token_count` events
@@ -15,10 +16,14 @@ struct CodexUsageProvider: UsageProviderAdapter {
 }
 
 enum CodexReader {
+    private static let logger = Logger(subsystem: "local.llmusagebar",
+                                       category: "CodexReader")
     /// A new Codex rollout commonly starts with one `token_count` whose
     /// `rate_limits` is null. Give the session writer a short window to publish
     /// the first complete event before treating the missing limits as real.
     private static let initialRateLimitsGraceInterval: TimeInterval = 5 * 60
+    private static let initialSessionTailBytes: UInt64 = 256 * 1024
+    private static let maximumSessionTailBytes: UInt64 = 4 * 1024 * 1024
 
     static let sessionsDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex/sessions", isDirectory: true)
@@ -29,7 +34,20 @@ enum CodexReader {
             return provider(from: snapshot)
         }
 
-        guard let latest = overrideFile.flatMap({ latestTokenCount(in: $0, sourceFile: $0) }) ?? newestTokenCount() else {
+        return readLocal(config: config, overrideFile: overrideFile)
+    }
+
+    static func readLocal(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
+        let startedAt = Date()
+        var overrideBytesRead: UInt64 = 0
+        let latest = overrideFile.flatMap {
+            latestTokenCount(in: $0, sourceFile: $0, bytesRead: &overrideBytesRead)
+        } ?? newestTokenCount()
+        guard let latest else {
+            let elapsed = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            logger.notice(
+                "Local fallback found no usage elapsed_ms=\(elapsed, privacy: .public)"
+            )
             return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: false,
                                  windows: [], note: "codex.note.sessionsMissing".l10n)
         }
@@ -80,10 +98,15 @@ enum CodexReader {
                                  plan: plan)
         }
 
-        return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
-                             windows: windows, quotas: [localQuota], note: fallbackNote, lastActivity: latest.timestamp,
-                             sourceFile: latest.sourceFile,
-                             plan: plan)
+        let provider = ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
+                                     windows: windows, quotas: [localQuota], note: fallbackNote,
+                                     lastActivity: latest.timestamp, sourceFile: latest.sourceFile,
+                                     plan: plan)
+        let elapsed = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        logger.info(
+            "Local fallback succeeded elapsed_ms=\(elapsed, privacy: .public) windows=\(windows.count, privacy: .public)"
+        )
+        return provider
     }
 
     private static func provider(from snapshot: CodexRateLimitSnapshot) -> ProviderUsage {
@@ -192,8 +215,14 @@ enum CodexReader {
     }
 
     private static func newestTokenCount() -> TokenInfo? {
-        let candidates = recentSessionFiles(limit: 80)
-            .compactMap { latestTokenCount(in: $0, sourceFile: $0) }
+        let files = recentSessionFiles(limit: 20)
+        var bytesRead: UInt64 = 0
+        let candidates = files.compactMap {
+            latestTokenCount(in: $0, sourceFile: $0, bytesRead: &bytesRead)
+        }
+        logger.info(
+            "Scanned bounded session tails files=\(files.count, privacy: .public) bytes=\(bytesRead, privacy: .public)"
+        )
         guard let newest = candidates.max(by: isOlder) else { return nil }
 
         // An empty first event in a newly-created rollout must not immediately
@@ -243,15 +272,47 @@ enum CodexReader {
         return Array(files.sorted { mtime($0) > mtime($1) }.prefix(limit))
     }
 
-    /// Last `token_count` event in the file that carries usable rate limits
-    /// (chronological => last line wins). Codex occasionally emits a trailing
-    /// token_count with primary/secondary set to null (e.g. right after a limit
-    /// is hit, while it briefly reports a credits/premium structure instead) —
-    /// we don't want that to blank out the last known percent, so we prefer the
-    /// newest event that actually has primary/secondary data, falling back to
-    /// the newest event overall only if none do.
-    private static func latestTokenCount(in file: URL, sourceFile: URL) -> TokenInfo? {
-        guard let content = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+    /// Reads a bounded tail instead of loading the whole rollout. Session files
+    /// can grow to hundreds of megabytes, while the newest token_count events
+    /// are written near the end. Grow the tail only when a trailing event has
+    /// no usable limits and we need its nearest usable predecessor.
+    private static func latestTokenCount(in file: URL,
+                                         sourceFile: URL,
+                                         bytesRead: inout UInt64) -> TokenInfo? {
+        guard let handle = try? FileHandle(forReadingFrom: file),
+              let fileSize = try? handle.seekToEnd() else { return nil }
+        defer { try? handle.close() }
+
+        var tailSize = min(fileSize, initialSessionTailBytes)
+        while true {
+            let start = fileSize - tailSize
+            do {
+                try handle.seek(toOffset: start)
+                guard var data = try handle.read(upToCount: Int(tailSize)) else { return nil }
+                bytesRead += UInt64(data.count)
+                if start > 0, let newline = data.firstIndex(of: 0x0A) {
+                    data.removeSubrange(...newline)
+                }
+                if let content = String(data: data, encoding: .utf8) {
+                    let result = tokenCounts(in: content, sourceFile: sourceFile)
+                    if result.usable != nil
+                        || tailSize == fileSize
+                        || tailSize >= maximumSessionTailBytes {
+                        return result.usable ?? result.any
+                    }
+                }
+            } catch {
+                return nil
+            }
+
+            let expanded = min(fileSize, maximumSessionTailBytes, tailSize * 2)
+            guard expanded > tailSize else { return nil }
+            tailSize = expanded
+        }
+    }
+
+    private static func tokenCounts(in content: String,
+                                    sourceFile: URL) -> (any: TokenInfo?, usable: TokenInfo?) {
         var anyResult: TokenInfo? = nil
         var usableResult: TokenInfo? = nil
         for line in content.split(separator: "\n") {
@@ -271,7 +332,7 @@ enum CodexReader {
             anyResult = info // keep overwriting; last one is newest
             if hasUsableLimits(info) { usableResult = info }
         }
-        return usableResult ?? anyResult
+        return (anyResult, usableResult)
     }
 
     private static func windowKind(minutes: Double?) -> UsageWindowKind {

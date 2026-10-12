@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 
 private enum OrbTheme {
     static var accent: NSColor {
@@ -385,6 +386,8 @@ private final class UsageWindowPickerView: NSView {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private static let logger = Logger(subsystem: "local.llmusagebar",
+                                       category: "Refresh")
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var config = Config.load()
@@ -424,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] _ in
             self?.refresh(forceReconnect: true)
         }
-        refresh()
+        refresh(showLocalImmediately: true)
         scheduleTimer()
         scheduleSessionWatcher()
     }
@@ -448,7 +451,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Reads all data on a background queue and only touches the UI on main —
     /// file I/O must never block the main thread, or the menu lags on click.
-    private func refresh(forceReconnect: Bool = false) {
+    private func refresh(forceReconnect: Bool = false,
+                         showLocalImmediately: Bool = false) {
         precondition(Thread.isMainThread)
         if forceReconnect { forceReconnectPending = true }
         guard !refreshInFlight else {
@@ -459,11 +463,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let shouldReconnect = forceReconnectPending
         forceReconnectPending = false
         let revision = configRevision
+        let refreshStartedAt = Date()
         ioQueue.async { [weak self] in
             if shouldReconnect {
                 CodexAppServerClient.invalidateConnection()
             }
             let cfg = Config.load()
+            if showLocalImmediately, cfg.providerID == .codex {
+                let localProvider = CodexReader.readLocal(config: cfg)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.lastProvider == nil,
+                          revision == self.configRevision else { return }
+                    self.config = cfg
+                    self.lastProvider = localProvider
+                    self.updateTitle(localProvider)
+                    let menu = self.buildMenu(localProvider)
+                    menu.delegate = self
+                    self.statusItem.menu = menu
+                    self.scheduleSessionWatcher(for: localProvider.sourceFile)
+                    let elapsed = Int(Date().timeIntervalSince(refreshStartedAt) * 1_000)
+                    Self.logger.info(
+                        "Initial local UI rendered elapsed_ms=\(elapsed, privacy: .public) available=\(localProvider.available, privacy: .public)"
+                    )
+                }
+            }
             let provider = UsageProviderRegistry.adapter(for: cfg.providerID).read(config: cfg)
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -481,6 +505,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.delegate = self
                 self.statusItem.menu = menu
                 self.scheduleSessionWatcher(for: provider.sourceFile)
+                let elapsed = Int(Date().timeIntervalSince(refreshStartedAt) * 1_000)
+                let source = provider.sourceFile == nil ? "app_server" : "local_session"
+                Self.logger.info(
+                    "Refresh completed source=\(source, privacy: .public) elapsed_ms=\(elapsed, privacy: .public) available=\(provider.available, privacy: .public)"
+                )
                 self.finishRefresh()
             }
         }

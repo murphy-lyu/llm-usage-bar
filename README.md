@@ -55,6 +55,15 @@ build/DerivedData/Build/Products/Release/Orb.app
 build/DerivedData/Build/Products/Release/Orb.app/Contents/MacOS/Orb --once
 ```
 
+查看刷新、重连和本地回退诊断日志：
+
+```bash
+log stream --info --style compact \
+  --predicate 'subsystem == "local.llmusagebar"'
+```
+
+诊断日志只记录数据源、阶段、耗时、重试次数和读取字节数，不记录账号或会话内容。
+
 工程文件由 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 根据 `project.yml` 生成。增删源文件后运行：
 
 ```bash
