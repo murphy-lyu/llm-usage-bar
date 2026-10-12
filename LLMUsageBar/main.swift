@@ -395,6 +395,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var refreshDebounce: DispatchWorkItem?
     private var refreshInFlight = false
     private var refreshPending = false
+    private var forceReconnectPending = false
+    private var wakeObserver: NSObjectProtocol?
     private var configRevision = 0
     private var hasAlertBaseline = false
     private var lastPercents: [String: Double] = [:]
@@ -415,6 +417,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.debouncedRefresh(after: 0.15)
             }
         }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refresh(forceReconnect: true)
+        }
         refresh()
         scheduleTimer()
         scheduleSessionWatcher()
@@ -422,6 +431,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         CodexAppServerClient.setRateLimitsUpdateHandler(nil)
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
     }
 
     private func scheduleTimer() {
@@ -436,15 +448,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Reads all data on a background queue and only touches the UI on main —
     /// file I/O must never block the main thread, or the menu lags on click.
-    private func refresh() {
+    private func refresh(forceReconnect: Bool = false) {
         precondition(Thread.isMainThread)
+        if forceReconnect { forceReconnectPending = true }
         guard !refreshInFlight else {
             refreshPending = true
             return
         }
         refreshInFlight = true
+        let shouldReconnect = forceReconnectPending
+        forceReconnectPending = false
         let revision = configRevision
         ioQueue.async { [weak self] in
+            if shouldReconnect {
+                CodexAppServerClient.invalidateConnection()
+            }
             let cfg = Config.load()
             let provider = UsageProviderRegistry.adapter(for: cfg.providerID).read(config: cfg)
             DispatchQueue.main.async {
@@ -901,7 +919,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsOpener?.open(config: config)
     }
 
-    @objc private func manualRefresh() { refresh() }
+    @objc private func manualRefresh() { refresh(forceReconnect: true) }
 
     @objc private func selectPercentRemaining() {
         selectPercentMode(.remaining)

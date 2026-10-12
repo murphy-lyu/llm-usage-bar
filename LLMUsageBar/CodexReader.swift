@@ -53,6 +53,7 @@ enum CodexReader {
         let planFromSession = (latest.rateLimits?["plan_type"]).map { valueString($0) }
         let plan = (planFromAuth ?? planFromSession).flatMap(planName)
         let quotaID = (latest.rateLimits?["limit_id"] as? String) ?? "codex"
+        let fallbackNote = overrideFile == nil ? "codex.note.localFallback".l10n : nil
         let localQuota = UsageQuota(
             id: quotaID,
             name: "quota.general".l10n,
@@ -80,7 +81,7 @@ enum CodexReader {
         }
 
         return ProviderUsage(providerID: .codex, name: "Codex", short: "CX", available: true,
-                             windows: windows, quotas: [localQuota], note: nil, lastActivity: latest.timestamp,
+                             windows: windows, quotas: [localQuota], note: fallbackNote, lastActivity: latest.timestamp,
                              sourceFile: latest.sourceFile,
                              plan: plan)
     }

@@ -13,6 +13,7 @@
 "codex.detail.noOfficialLimits" = "无官方上限数据";
 "codex.note.rateLimitsEmpty" = "当前供应商未返回官方上限（rate_limits 为空）";
 "codex.note.sessionsMissing" = "未找到 ~/.codex/sessions 数据";
+"codex.note.localFallback" = "仅本地数据";
 "codex.note.tokenCountMissing" = "会话中暂无 token 用量事件";
 "codex.window.sessionUsage" = "本会话用量";
 

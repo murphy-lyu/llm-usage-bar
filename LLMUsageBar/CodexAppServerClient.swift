@@ -50,6 +50,10 @@ enum CodexAppServerClient {
         connection.readRateLimits()
     }
 
+    static func invalidateConnection() {
+        connection.invalidate()
+    }
+
     static func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
         connection.setRateLimitsUpdateHandler(handler)
     }
@@ -65,6 +69,7 @@ enum CodexAppServerClient {
         private var reader: JSONLineResponseReader?
         private var nextRequestID = 2
         private var rateLimitsUpdateHandler: (() -> Void)?
+        private var runningExecutable: ExecutableIdentity?
 
         func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
             handlerLock.lock()
@@ -76,6 +81,25 @@ enum CodexAppServerClient {
             lock.lock()
             defer { lock.unlock() }
 
+            // Recover once before falling back to local session data. This
+            // covers app updates, sleep/wake, broken pipes, and transient
+            // initialization failures without repeatedly spawning processes.
+            for _ in 0..<2 {
+                if let snapshot = readRateLimitsOnce() {
+                    return snapshot
+                }
+                stop()
+            }
+            return nil
+        }
+
+        func invalidate() {
+            lock.lock()
+            stop()
+            lock.unlock()
+        }
+
+        private func readRateLimitsOnce() -> CodexRateLimitSnapshot? {
             guard ensureStarted(),
                   let inputHandle,
                   let reader else { return nil }
@@ -90,31 +114,39 @@ enum CodexAppServerClient {
                 ], to: inputHandle)
                 guard let response = reader.waitForResponse(id: requestID, timeout: 7),
                       let snapshot = snapshot(from: response) else {
-                    stop()
                     return nil
                 }
                 return snapshot
             } catch {
-                stop()
                 return nil
             }
         }
 
         private func ensureStarted() -> Bool {
-            if process?.isRunning == true, inputHandle != nil, reader != nil {
+            guard let executable = executable() else {
+                stop()
+                return false
+            }
+            if process?.isRunning == true,
+               inputHandle != nil,
+               reader != nil,
+               runningExecutable == executable.identity {
                 return true
             }
             stop()
-            guard let executableURL = executableURL() else { return false }
 
             let process = Process()
             let inputPipe = Pipe()
             let outputPipe = Pipe()
-            process.executableURL = executableURL
+            process.executableURL = executable.url
             process.arguments = ["app-server", "--stdio"]
             process.standardInput = inputPipe
             process.standardOutput = outputPipe
             process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { [weak self, weak process] terminated in
+                guard let self, let process, process === terminated else { return }
+                self.processDidTerminate(process)
+            }
 
             let reader = JSONLineResponseReader(
                 handle: outputPipe.fileHandleForReading,
@@ -126,6 +158,7 @@ enum CodexAppServerClient {
             self.process = process
             self.inputHandle = inputPipe.fileHandleForWriting
             self.reader = reader
+            runningExecutable = executable.identity
             nextRequestID = 2
 
             do {
@@ -154,6 +187,24 @@ enum CodexAppServerClient {
             }
         }
 
+        private func processDidTerminate(_ terminated: Process) {
+            lock.lock()
+            guard process === terminated else {
+                lock.unlock()
+                return
+            }
+            reader?.stop()
+            try? inputHandle?.close()
+            reader = nil
+            inputHandle = nil
+            process = nil
+            runningExecutable = nil
+            lock.unlock()
+
+            // Reconnect promptly instead of waiting for the polling timer.
+            notifyRateLimitsUpdated()
+        }
+
         private func notifyRateLimitsUpdated() {
             handlerLock.lock()
             let handler = rateLimitsUpdateHandler
@@ -168,10 +219,23 @@ enum CodexAppServerClient {
             reader = nil
             inputHandle = nil
             process = nil
+            runningExecutable = nil
         }
     }
 
-    private static func executableURL() -> URL? {
+    private struct ExecutableIdentity: Equatable {
+        var path: String
+        var fileNumber: UInt64?
+        var size: UInt64?
+        var modificationDate: Date?
+    }
+
+    private struct Executable {
+        var url: URL
+        var identity: ExecutableIdentity
+    }
+
+    private static func executable() -> Executable? {
         let fm = FileManager.default
         var candidates: [String] = [
             "/Applications/ChatGPT.app/Contents/Resources/codex",
@@ -189,7 +253,17 @@ enum CodexAppServerClient {
         }
 
         for path in candidates where fm.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
+            let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+            let attributes = try? fm.attributesOfItem(atPath: url.path)
+            return Executable(
+                url: url,
+                identity: ExecutableIdentity(
+                    path: url.path,
+                    fileNumber: (attributes?[.systemFileNumber] as? NSNumber)?.uint64Value,
+                    size: (attributes?[.size] as? NSNumber)?.uint64Value,
+                    modificationDate: attributes?[.modificationDate] as? Date
+                )
+            )
         }
         return nil
     }
@@ -314,6 +388,7 @@ private final class JSONLineResponseReader {
     private let condition = NSCondition()
     private var buffer = Data()
     private var responses: [Int: [String: Any]] = [:]
+    private var closed = false
     private let handle: FileHandle
     private let notificationHandler: (String) -> Void
 
@@ -327,6 +402,10 @@ private final class JSONLineResponseReader {
 
     func stop() {
         handle.readabilityHandler = nil
+        condition.lock()
+        closed = true
+        condition.broadcast()
+        condition.unlock()
     }
 
     func waitForResponse(id: Int, timeout: TimeInterval) -> [String: Any]? {
@@ -334,7 +413,7 @@ private final class JSONLineResponseReader {
         condition.lock()
         defer { condition.unlock() }
 
-        while responses[id] == nil {
+        while responses[id] == nil && !closed {
             guard condition.wait(until: deadline) else { return nil }
         }
         return responses.removeValue(forKey: id)
@@ -343,6 +422,7 @@ private final class JSONLineResponseReader {
     private func consume(_ data: Data) {
         guard !data.isEmpty else {
             condition.lock()
+            closed = true
             condition.broadcast()
             condition.unlock()
             return
