@@ -153,7 +153,28 @@ private final class AuxiliaryValueRowView: NSView {
 /// Accounts submenu so checking several accounts never requires a third menu.
 private struct AccountSummaryWindowLine {
     var label: String
-    var value: String
+    var percent: String
+    var reset: String
+}
+
+private final class AccountGroupHeaderView: NSView {
+    init(title: String, width: CGFloat) {
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
+
+        let label = NSTextField(labelWithString: title)
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = .tertiaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 private final class AccountSummaryRowView: NSView {
@@ -168,15 +189,15 @@ private final class AccountSummaryRowView: NSView {
         emailLabel.font = .systemFont(ofSize: 12, weight: .medium)
         emailLabel.textColor = .labelColor
         emailLabel.lineBreakMode = .byTruncatingMiddle
+        emailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         emailLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(emailLabel)
 
         let statusLabel = NSTextField(labelWithString: status)
-        statusLabel.font = .systemFont(ofSize: 11, weight: .regular)
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        statusLabel.textColor = .tertiaryLabelColor
         statusLabel.alignment = .right
-        statusLabel.lineBreakMode = .byTruncatingTail
-        statusLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(statusLabel)
 
@@ -190,46 +211,41 @@ private final class AccountSummaryRowView: NSView {
         NSLayoutConstraint.activate([
             emailLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             emailLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            emailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
+            emailLabel.trailingAnchor.constraint(lessThanOrEqualTo: statusLabel.leadingAnchor, constant: -10),
+            statusLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            statusLabel.firstBaselineAnchor.constraint(equalTo: emailLabel.firstBaselineAnchor),
             updatedLabel.leadingAnchor.constraint(equalTo: emailLabel.leadingAnchor),
             updatedLabel.topAnchor.constraint(
                 equalTo: emailLabel.bottomAnchor,
                 constant: 5 + CGFloat(min(windows.count, 2) * 14)
-            )
-        ])
-
-        if status.isEmpty {
+            ),
             updatedLabel.trailingAnchor.constraint(
                 lessThanOrEqualTo: trailingAnchor,
                 constant: -14
-            ).isActive = true
-        } else {
-            updatedLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            NSLayoutConstraint.activate([
-                statusLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                statusLabel.firstBaselineAnchor.constraint(equalTo: updatedLabel.firstBaselineAnchor),
-                updatedLabel.trailingAnchor.constraint(
-                    lessThanOrEqualTo: statusLabel.leadingAnchor,
-                    constant: -10
-                )
-            ])
-        }
+            )
+        ])
 
         for (index, window) in windows.prefix(2).enumerated() {
             let label = NSTextField(labelWithString: window.label)
             label.font = .systemFont(ofSize: 11, weight: .regular)
             label.textColor = .secondaryLabelColor
-            label.lineBreakMode = .byTruncatingTail
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 
-            let value = NSTextField(labelWithString: window.value)
-            value.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-            value.textColor = .secondaryLabelColor
-            value.alignment = .right
-            value.lineBreakMode = .byTruncatingTail
-            value.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(value)
+            let percent = NSTextField(labelWithString: window.percent)
+            percent.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            percent.textColor = .secondaryLabelColor
+            percent.lineBreakMode = .byTruncatingTail
+            percent.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(percent)
+
+            let reset = NSTextField(labelWithString: window.reset)
+            reset.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            reset.textColor = .secondaryLabelColor
+            reset.alignment = .right
+            reset.setContentCompressionResistancePriority(.required, for: .horizontal)
+            reset.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(reset)
 
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: emailLabel.leadingAnchor),
@@ -237,9 +253,12 @@ private final class AccountSummaryRowView: NSView {
                     equalTo: emailLabel.bottomAnchor,
                     constant: 3 + CGFloat(index * 14)
                 ),
-                value.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 12),
-                value.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                value.firstBaselineAnchor.constraint(equalTo: label.firstBaselineAnchor)
+                label.widthAnchor.constraint(equalToConstant: 48),
+                percent.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
+                percent.trailingAnchor.constraint(lessThanOrEqualTo: reset.leadingAnchor, constant: -8),
+                percent.firstBaselineAnchor.constraint(equalTo: label.firstBaselineAnchor),
+                reset.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                reset.firstBaselineAnchor.constraint(equalTo: label.firstBaselineAnchor)
             ])
         }
     }
@@ -798,16 +817,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var hasAddedOtherHeader = false
         for summary in summaries {
             if summary.account.id == currentID {
-                menu.addItem(quotaHeaderItem("accounts.group.current".l10n, width: summaryWidth))
+                menu.addItem(accountGroupHeaderItem("accounts.group.current".l10n, width: summaryWidth))
             } else if !hasAddedOtherHeader {
                 if hasAddedSummary { menu.addItem(.separator()) }
-                menu.addItem(quotaHeaderItem("accounts.group.other".l10n, width: summaryWidth))
+                menu.addItem(accountGroupHeaderItem("accounts.group.other".l10n, width: summaryWidth))
                 hasAddedOtherHeader = true
             } else {
                 menu.addItem(.separator())
             }
             let accessibilityParts = [summary.title, summary.status]
-                + summary.windows.map { "\($0.label) \($0.value)" }
+                + summary.windows.map { "\($0.label) \($0.percent) \($0.reset)" }
                 + [summary.updated]
             let item = NSMenuItem(
                 title: accessibilityParts
@@ -841,8 +860,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let contentWidth = summaries.reduce(CGFloat.zero) { current, summary in
             let windowWidth = summary.windows.reduce(CGFloat.zero) { current, window in
                 let labelWidth = (window.label as NSString).size(withAttributes: [.font: labelFont]).width
-                let valueWidth = (window.value as NSString).size(withAttributes: [.font: resetFont]).width
-                return max(current, labelWidth + valueWidth + 12)
+                let percentWidth = (window.percent as NSString).size(withAttributes: [.font: resetFont]).width
+                let resetWidth = (window.reset as NSString).size(withAttributes: [.font: resetFont]).width
+                return max(current, max(48, labelWidth) + percentWidth + resetWidth + 16)
             }
             let updatedWidth = (summary.updated as NSString).size(withAttributes: [.font: updatedFont]).width
             return max(current, max(windowWidth, updatedWidth))
@@ -854,12 +874,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func accountWindowLines(_ account: CodexAccountRecord) -> [AccountSummaryWindowLine] {
         let sorted = account.windows.sorted { accountWindowOrder($0.kind) < accountWindowOrder($1.kind) }
         guard !sorted.isEmpty else {
-            return [AccountSummaryWindowLine(label: "accounts.noResetData".l10n, value: "")]
+            return [AccountSummaryWindowLine(
+                label: "accounts.noResetData".l10n,
+                percent: "",
+                reset: ""
+            )]
         }
         return sorted.prefix(2).map { window in
             return AccountSummaryWindowLine(
-                label: "\(accountWindowLabel(window)) · \(accountWindowPercent(window))",
-                value: accountResetValue(window)
+                label: accountWindowCompactLabel(window),
+                percent: accountWindowPercent(window),
+                reset: accountResetValue(window)
             )
         }
     }
@@ -877,9 +902,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func accountUpdatedText(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
+        if Calendar.autoupdatingCurrent.isDateInToday(date) {
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+        } else {
+            formatter.dateStyle = .short
+            formatter.timeStyle = .none
+        }
         return "\("accounts.updated".l10n) \(formatter.string(from: date))"
+    }
+
+    private func accountGroupHeaderItem(_ title: String, width: CGFloat) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.view = AccountGroupHeaderView(title: title, width: width)
+        return item
     }
 
     private func accountWindowOrder(_ kind: UsageWindowKind) -> Int {
@@ -908,6 +944,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return String.localizedStringWithFormat("limit.hours".l10n, rounded / 60)
             }
             return String.localizedStringWithFormat("limit.minutes".l10n, rounded)
+        }
+    }
+
+    private func accountWindowCompactLabel(_ window: CodexAccountWindowRecord) -> String {
+        switch window.kind {
+        case .fiveHour: return "accounts.window.fiveHour".l10n
+        case .weekly: return "accounts.window.weekly".l10n
+        default: return accountWindowLabel(window)
         }
     }
 

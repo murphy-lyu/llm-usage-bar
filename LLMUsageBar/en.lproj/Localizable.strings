@@ -88,10 +88,12 @@
 "accounts.group.current" = "Current Account";
 "accounts.group.other" = "Other Accounts";
 "accounts.fallback" = "Codex account %d";
-"accounts.needsRefresh" = "Needs refresh";
+"accounts.needsRefresh" = "Refresh";
 "accounts.noResetData" = "No reset data";
 "accounts.saved" = "%d saved";
 "accounts.updated" = "Updated";
+"accounts.window.fiveHour" = "5h";
+"accounts.window.weekly" = "Weekly";
 
 "usage.credits.available" = "Available";
 "usage.credits.title" = "Credits";

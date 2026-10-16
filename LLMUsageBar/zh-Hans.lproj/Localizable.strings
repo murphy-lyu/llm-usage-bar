@@ -92,6 +92,8 @@
 "accounts.noResetData" = "暂无重置数据";
 "accounts.saved" = "已保存 %d 个";
 "accounts.updated" = "更新于";
+"accounts.window.fiveHour" = "5 小时";
+"accounts.window.weekly" = "每周";
 
 "usage.credits.available" = "可用";
 "usage.credits.title" = "额外额度";
