@@ -33,6 +33,7 @@
 
 "menu.menuBarMode.title" = "Limit";
 "menu.quota.title" = "Model";
+"menu.accounts.title" = "Accounts";
 "provider.unsupported" = "Not supported yet";
 "quota.general" = "General";
 
@@ -82,6 +83,15 @@
 "status.unavailable" = "(No Data)";
 "status.updatedAt" = "Updated %@";
 "time.now" = "Now";
+
+"accounts.current" = "Current";
+"accounts.group.current" = "Current Account";
+"accounts.group.other" = "Other Accounts";
+"accounts.fallback" = "Codex account %d";
+"accounts.needsRefresh" = "Needs refresh";
+"accounts.noResetData" = "No reset data";
+"accounts.saved" = "%d saved";
+"accounts.updated" = "Updated";
 
 "usage.credits.available" = "Available";
 "usage.credits.title" = "Credits";

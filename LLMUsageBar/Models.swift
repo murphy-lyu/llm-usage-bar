@@ -63,7 +63,7 @@ private struct UnsupportedUsageProvider: UsageProviderAdapter {
     }
 }
 
-enum UsageWindowKind: String {
+enum UsageWindowKind: String, Codable {
     case fiveHour
     case daily
     case weekly
@@ -161,6 +161,7 @@ struct ProviderUsage {
     var plan: String?          // e.g. "Plus" — shown as auxiliary text in the header row
     var credits: UsageCredits?
     var resetCredits: UsageResetCredits?
+    var account: UsageAccount? = nil
 
     var effectiveQuotas: [UsageQuota] {
         if !quotas.isEmpty { return quotas }
@@ -253,6 +254,11 @@ struct ProviderUsage {
         }.max { ($0.resetAt ?? .distantPast) < ($1.resetAt ?? .distantPast) }
     }
 
+}
+
+struct UsageAccount {
+    var id: String
+    var email: String?
 }
 
 extension UsageWindow {

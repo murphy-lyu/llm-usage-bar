@@ -16,13 +16,19 @@ while let line = readLine(),
         continue
     }
 
+    if method == "account/read" {
+        print("{\"id\":\(id),\"result\":{\"account\":{\"type\":\"chatgpt\",\"email\":\"test@example.com\",\"planType\":\"plus\"},\"requiresOpenaiAuth\":true}}")
+        fflush(stdout)
+        continue
+    }
+
     if method == "account/rateLimits/read" {
         if !FileManager.default.fileExists(atPath: statePath) {
             _ = FileManager.default.createFile(atPath: statePath, contents: Data())
             exit(1)
         }
         print("""
-        {"id":\(id),"result":{"rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":42,"windowDurationMins":300}},"rateLimitResetCredits":{"availableCount":3,"credits":null}}}
+        {"id":\(id),"result":{"accountId":"account-test","rateLimits":{"limitId":"codex","planType":"plus","primary":{"usedPercent":42,"windowDurationMins":300}},"rateLimitResetCredits":{"availableCount":3,"credits":null}}}
         """)
         fflush(stdout)
     }

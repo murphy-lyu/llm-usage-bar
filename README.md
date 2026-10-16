@@ -20,6 +20,7 @@ Orb 优先通过本机 Codex App Server 的 `account/rateLimits/read` 接口读�
 - 多额度组选择，例如通用额度与模型专属额度
 - 用量阈值提醒
 - 额外 credits 和额度重置次数，仅在实际可用时显示
+- 自动识别切换过的 Codex 账号，并保留各账号最近一次 5 小时及每周重置时间
 - 中英文界面、开机自动启动
 
 Orb 默认在菜单栏显示 5 小时剩余用量。已有用户的手动选择会继续保留。
@@ -87,7 +88,7 @@ xcodegen generate
 
 ## 隐私与数据
 
-Orb 不保存 ChatGPT 密码，也不要求单独登录。账户用量由本机已登录的 Codex App Server 获取；回退数据来自本机 Codex session 文件。Orb 不上传会话内容。
+Orb 不保存 ChatGPT 密码，也不要求单独登录。账户用量由本机已登录的 Codex App Server 获取；回退数据来自本机 Codex session 文件。为区分切换过的账号，Orb 仅在本机保存账号 ID、邮箱、套餐和最近一次用量窗口快照，文件权限限制为当前用户可读写。Orb 不上传这些信息或会话内容。
 
 ## License
 

@@ -31,7 +31,8 @@ enum CodexReader {
     static func read(config: Config, overrideFile: URL? = nil) -> ProviderUsage {
         if overrideFile == nil,
            let snapshot = CodexAppServerClient.readRateLimits() {
-            return provider(from: snapshot)
+            let account = CodexAccountHistoryStore.record(snapshot)
+            return provider(from: snapshot, accountRecord: account)
         }
 
         return readLocal(config: config, overrideFile: overrideFile)
@@ -109,7 +110,8 @@ enum CodexReader {
         return provider
     }
 
-    private static func provider(from snapshot: CodexRateLimitSnapshot) -> ProviderUsage {
+    private static func provider(from snapshot: CodexRateLimitSnapshot,
+                                 accountRecord: CodexAccountRecord?) -> ProviderUsage {
         let quotas = snapshot.groups.map { group -> UsageQuota in
             let reportedWindows: [(String, CodexRateLimitWindow?)] = [
                 ("limit.primary".l10n, group.primary),
@@ -132,7 +134,9 @@ enum CodexReader {
                               windows: windows)
         }
         let windows = quotas.flatMap(\.windows)
-        let plan = (snapshot.groups.compactMap(\.planType).first ?? authPlanType()).flatMap(planName)
+        let plan = (snapshot.groups.compactMap(\.planType).first
+            ?? snapshot.accountPlanType
+            ?? authPlanType()).flatMap(planName)
 
         return ProviderUsage(
             providerID: .codex,
@@ -161,7 +165,8 @@ enum CodexReader {
                                          detail: $0.description)
                     }
                 )
-            }
+            },
+            account: accountRecord.map { UsageAccount(id: $0.id, email: $0.email) }
         )
     }
 
@@ -390,7 +395,7 @@ enum CodexReader {
         return String(describing: v)
     }
 
-    private static func planName(_ value: String) -> String? {
+    static func planName(_ value: String) -> String? {
         switch value.lowercased() {
         case "free": return "Free"
         case "go": return "Go"

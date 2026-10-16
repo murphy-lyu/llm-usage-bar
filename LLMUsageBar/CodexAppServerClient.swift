@@ -39,6 +39,14 @@ struct CodexRateLimitSnapshot {
     var credits: CodexCreditsSnapshot?
     var resetCredits: CodexResetCreditsSnapshot?
     var fetchedAt: Date
+    var accountID: String?
+    var accountEmail: String?
+    var accountPlanType: String?
+}
+
+struct CodexAccountIdentity {
+    var email: String?
+    var planType: String?
 }
 
 /// Reads account-level limits through Codex's official local app-server API.
@@ -73,6 +81,7 @@ enum CodexAppServerClient {
         private var nextRequestID = 2
         private var rateLimitsUpdateHandler: (() -> Void)?
         private var runningExecutable: ExecutableIdentity?
+        private var runningAuthFile: FileIdentity?
 
         func setRateLimitsUpdateHandler(_ handler: (() -> Void)?) {
             handlerLock.lock()
@@ -122,6 +131,7 @@ enum CodexAppServerClient {
                 return nil
             }
 
+            let accountRequestID = requestAccount(using: inputHandle)
             let requestID = nextRequestID
             nextRequestID += 1
             do {
@@ -136,12 +146,17 @@ enum CodexAppServerClient {
                     )
                     return nil
                 }
-                guard let snapshot = snapshot(from: response) else {
+                guard var snapshot = snapshot(from: response) else {
                     CodexAppServerClient.logger.error(
                         "Rate-limit response was missing usable windows request_id=\(requestID, privacy: .public)"
                     )
                     return nil
                 }
+                let account = accountRequestID.flatMap {
+                    accountResponse(id: $0, reader: reader)
+                }
+                snapshot.accountEmail = account?.email
+                snapshot.accountPlanType = account?.planType
                 return snapshot
             } catch {
                 CodexAppServerClient.logger.error(
@@ -151,16 +166,39 @@ enum CodexAppServerClient {
             }
         }
 
+        private func requestAccount(using inputHandle: FileHandle) -> Int? {
+            let requestID = nextRequestID
+            nextRequestID += 1
+            do {
+                try write([
+                    "method": "account/read",
+                    "id": requestID,
+                    "params": ["refreshToken": false]
+                ], to: inputHandle)
+                return requestID
+            } catch {
+                return nil
+            }
+        }
+
+        private func accountResponse(id: Int,
+                                     reader: JSONLineResponseReader) -> CodexAccountIdentity? {
+            guard let response = reader.waitForResponse(id: id, timeout: 0.5) else { return nil }
+            return CodexAppServerClient.accountIdentity(from: response)
+        }
+
         private func ensureStarted() -> Bool {
             guard let executable = executable() else {
                 CodexAppServerClient.logger.error("No executable Codex CLI was found")
                 stop()
                 return false
             }
+            let currentAuthFile = authFileIdentity()
             if process?.isRunning == true,
                inputHandle != nil,
                reader != nil,
-               runningExecutable == executable.identity {
+               runningExecutable == executable.identity,
+               runningAuthFile == currentAuthFile {
                 return true
             }
             if process?.isRunning == true, runningExecutable != executable.identity {
@@ -186,7 +224,9 @@ enum CodexAppServerClient {
             let reader = JSONLineResponseReader(
                 handle: outputPipe.fileHandleForReading,
                 notificationHandler: { [weak self] method in
-                    guard method == "account/rateLimits/updated" else { return }
+                    guard method == "account/rateLimits/updated"
+                            || method == "account/updated"
+                            || method == "account/login/completed" else { return }
                     self?.notifyRateLimitsUpdated()
                 }
             )
@@ -194,6 +234,7 @@ enum CodexAppServerClient {
             self.inputHandle = inputPipe.fileHandleForWriting
             self.reader = reader
             runningExecutable = executable.identity
+            runningAuthFile = currentAuthFile
             nextRequestID = 2
 
             do {
@@ -238,6 +279,7 @@ enum CodexAppServerClient {
             inputHandle = nil
             process = nil
             runningExecutable = nil
+            runningAuthFile = nil
             lock.unlock()
 
             CodexAppServerClient.logger.notice(
@@ -263,11 +305,18 @@ enum CodexAppServerClient {
             inputHandle = nil
             process = nil
             runningExecutable = nil
+            runningAuthFile = nil
         }
     }
 
     private struct ExecutableIdentity: Equatable {
         var path: String
+        var fileNumber: UInt64?
+        var size: UInt64?
+        var modificationDate: Date?
+    }
+
+    private struct FileIdentity: Equatable {
         var fileNumber: UInt64?
         var size: UInt64?
         var modificationDate: Date?
@@ -309,6 +358,26 @@ enum CodexAppServerClient {
             )
         }
         return nil
+    }
+
+    private static func authFileIdentity() -> FileIdentity? {
+        let home: URL
+        if let configured = ProcessInfo.processInfo.environment["CODEX_HOME"],
+           !configured.isEmpty {
+            home = URL(fileURLWithPath: configured, isDirectory: true)
+        } else {
+            home = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".codex", isDirectory: true)
+        }
+        let url = home.appendingPathComponent("auth.json")
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return nil
+        }
+        return FileIdentity(
+            fileNumber: (attributes[.systemFileNumber] as? NSNumber)?.uint64Value,
+            size: (attributes[.size] as? NSNumber)?.uint64Value,
+            modificationDate: attributes[.modificationDate] as? Date
+        )
     }
 
     private static func write(_ object: [String: Any], to handle: FileHandle) throws {
@@ -354,8 +423,27 @@ enum CodexAppServerClient {
             groups: groups,
             credits: credits,
             resetCredits: resetCredits,
-            fetchedAt: Date()
+            fetchedAt: Date(),
+            accountID: nonEmptyString(result["accountId"]),
+            accountEmail: nil,
+            accountPlanType: nil
         )
+    }
+
+    static func accountIdentity(from response: [String: Any]) -> CodexAccountIdentity? {
+        guard let result = response["result"] as? [String: Any],
+              let account = result["account"] as? [String: Any],
+              account["type"] as? String == "chatgpt" else { return nil }
+        return CodexAccountIdentity(
+            email: nonEmptyString(account["email"]),
+            planType: nonEmptyString(account["planType"])
+        )
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func resetCreditsSnapshot(_ value: Any?) -> CodexResetCreditsSnapshot? {
