@@ -89,6 +89,8 @@
 "accounts.group.other" = "其他账号";
 "accounts.fallback" = "Codex 账号 %d";
 "accounts.needsRefresh" = "待刷新";
+"accounts.dataExpired" = "数据已过期";
+"accounts.switchToRefresh" = "切换账号刷新";
 "accounts.noResetData" = "暂无重置数据";
 "accounts.saved" = "已保存 %d 个";
 "accounts.updated" = "更新于";

@@ -89,6 +89,8 @@
 "accounts.group.other" = "Other Accounts";
 "accounts.fallback" = "Codex account %d";
 "accounts.needsRefresh" = "Refresh";
+"accounts.dataExpired" = "Data expired";
+"accounts.switchToRefresh" = "Switch to refresh";
 "accounts.noResetData" = "No reset data";
 "accounts.saved" = "%d saved";
 "accounts.updated" = "Updated";
