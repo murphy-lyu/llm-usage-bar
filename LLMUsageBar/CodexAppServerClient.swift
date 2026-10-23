@@ -329,20 +329,13 @@ enum CodexAppServerClient {
 
     private static func executable() -> Executable? {
         let fm = FileManager.default
-        var candidates: [String] = [
-            "/Applications/ChatGPT.app/Contents/Resources/codex",
-            "/Applications/Codex.app/Contents/Resources/codex",
-            "/usr/local/bin/codex",
-            "/opt/homebrew/bin/codex"
-        ]
-
-        if let configured = ProcessInfo.processInfo.environment["CODEX_CLI_PATH"],
-           !configured.isEmpty {
-            candidates.insert(configured, at: 0)
-        }
-        if let path = ProcessInfo.processInfo.environment["PATH"] {
-            candidates.append(contentsOf: path.split(separator: ":").map { "\($0)/codex" })
-        }
+        let candidates = executableCandidatePaths(
+            environment: ProcessInfo.processInfo.environment,
+            applicationDirectories: fm.urls(
+                for: .applicationDirectory,
+                in: [.localDomainMask, .userDomainMask]
+            )
+        )
 
         for path in candidates where fm.isExecutableFile(atPath: path) {
             let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
@@ -358,6 +351,46 @@ enum CodexAppServerClient {
             )
         }
         return nil
+    }
+
+    /// Produces a deterministic candidate list without depending on a shell
+    /// login environment. LaunchServices apps normally receive only the
+    /// system PATH, while Codex ships inside ChatGPT and its bundle layout can
+    /// change between releases.
+    static func executableCandidatePaths(
+        environment: [String: String],
+        applicationDirectories: [URL]
+    ) -> [String] {
+        var candidates: [String] = []
+        if let configured = environment["CODEX_CLI_PATH"], !configured.isEmpty {
+            candidates.append(configured)
+        }
+
+        let appNames = ["ChatGPT.app", "Codex.app"]
+        let bundledPaths = [
+            "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+            "Contents/Resources/codex-cli/bin/codex",
+            "Contents/Resources/codex"
+        ]
+        for directory in applicationDirectories {
+            for appName in appNames {
+                let appURL = directory.appendingPathComponent(appName, isDirectory: true)
+                candidates.append(contentsOf: bundledPaths.map {
+                    appURL.appendingPathComponent($0).path
+                })
+            }
+        }
+
+        candidates.append(contentsOf: [
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex"
+        ])
+        if let path = environment["PATH"] {
+            candidates.append(contentsOf: path.split(separator: ":").map { "\($0)/codex" })
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0).inserted }
     }
 
     private static func authFileIdentity() -> FileIdentity? {

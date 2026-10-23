@@ -3,6 +3,8 @@ import Foundation
 @main
 struct ResetCreditsTests {
     static func main() {
+        testExecutableDiscovery()
+
         let expiry = Date(timeIntervalSince1970: 1_800_000_000)
         let response: [String: Any] = [
             "result": [
@@ -63,5 +65,26 @@ struct ResetCreditsTests {
         assert(UsageCredits(balance: nil, hasCredits: true, unlimited: false).shouldDisplay)
         assert(UsageCredits(balance: "0", hasCredits: false, unlimited: true).shouldDisplay)
         print("Reset credit tests passed.")
+    }
+
+    private static func testExecutableDiscovery() {
+        let paths = CodexAppServerClient.executableCandidatePaths(
+            environment: [
+                "CODEX_CLI_PATH": "/custom/codex",
+                "PATH": "/one:/two"
+            ],
+            applicationDirectories: [
+                URL(fileURLWithPath: "/Applications", isDirectory: true),
+                URL(fileURLWithPath: "/Users/test/Applications", isDirectory: true)
+            ]
+        )
+        assert(paths.first == "/custom/codex")
+        assert(paths.contains(
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+        ))
+        assert(paths.contains("/Users/test/Applications/Codex.app/Contents/Resources/codex"))
+        assert(paths.contains("/opt/homebrew/bin/codex"))
+        assert(paths.contains("/one/codex"))
+        assert(Set(paths).count == paths.count)
     }
 }

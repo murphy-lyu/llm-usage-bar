@@ -116,6 +116,7 @@ struct GeneralSettingsTab: View {
                 }
             }
         }
+        .font(OrbTypography.swiftUIRegular(13))
         .formStyle(.grouped)
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -190,10 +191,10 @@ struct AboutTab: View {
                 .frame(width: 60, height: 60)
 
             Text("Orb")
-                .font(.title2.bold())
+                .font(OrbTypography.swiftUIEmphasized(22))
             Text(String(format: "about.versionBuild".l10n, version, build))
                 .foregroundStyle(.secondary)
-                .font(.subheadline)
+                .font(OrbTypography.swiftUIRegular(13))
 
             Divider()
                 .frame(width: 150)
@@ -205,10 +206,10 @@ struct AboutTab: View {
                     .foregroundStyle(.tertiary)
                 Link("GitHub", destination: URL(string: "https://github.com/murphy-lyu/llm-usage-bar")!)
             }
-            .font(.caption)
+            .font(OrbTypography.swiftUIRegular(12))
 
             Text("@Murphy")
-                .font(.caption2)
+                .font(OrbTypography.swiftUIRegular(11))
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

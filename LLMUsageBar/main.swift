@@ -1,5 +1,35 @@
 import AppKit
 import OSLog
+import SwiftUI
+
+enum OrbTypography {
+    private static let regularName = "BerkeleyMono-Regular"
+    private static let boldName = "BerkeleyMono-Bold"
+
+    static var usesBerkeleyMono: Bool {
+        NSFont(name: regularName, size: 12) != nil
+    }
+
+    static func regular(_ size: CGFloat) -> NSFont {
+        NSFont(name: regularName, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: .regular)
+    }
+
+    static func emphasized(_ size: CGFloat) -> NSFont {
+        NSFont(name: boldName, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: .semibold)
+    }
+
+    static func swiftUIRegular(_ size: CGFloat) -> Font {
+        usesBerkeleyMono ? .custom(regularName, fixedSize: size) : .system(size: size)
+    }
+
+    static func swiftUIEmphasized(_ size: CGFloat) -> Font {
+        NSFont(name: boldName, size: size) != nil
+            ? .custom(boldName, fixedSize: size)
+            : .system(size: size, weight: .semibold)
+    }
+}
 
 private enum OrbTheme {
     static var accent: NSColor {
@@ -38,12 +68,12 @@ private final class MenuValueRowView: NSView {
         highlightView.isHidden = true
         addSubview(highlightView)
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        titleLabel.font = OrbTypography.emphasized(13)
         titleLabel.textColor = .labelColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
 
-        valueLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        valueLabel.font = OrbTypography.regular(13)
         valueLabel.textColor = .secondaryLabelColor
         valueLabel.alignment = .right
         valueLabel.lineBreakMode = .byTruncatingTail
@@ -123,13 +153,13 @@ private final class AuxiliaryValueRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        titleLabel.font = OrbTypography.regular(11)
         titleLabel.textColor = .secondaryLabelColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
 
         let valueLabel = NSTextField(labelWithString: value)
-        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valueLabel.font = OrbTypography.regular(11)
         valueLabel.textColor = .secondaryLabelColor
         valueLabel.alignment = .right
         valueLabel.lineBreakMode = .byTruncatingTail
@@ -162,7 +192,7 @@ private final class AccountGroupHeaderView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
 
         let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.font = OrbTypography.emphasized(10)
         label.textColor = .tertiaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
@@ -182,20 +212,20 @@ private final class AccountMetricView: NSView {
         super.init(frame: .zero)
 
         let title = NSTextField(labelWithString: window.label)
-        title.font = .systemFont(ofSize: 10, weight: .medium)
+        title.font = OrbTypography.emphasized(10)
         title.textColor = .tertiaryLabelColor
         title.translatesAutoresizingMaskIntoConstraints = false
         addSubview(title)
 
         let percent = NSTextField(labelWithString: window.percent)
-        percent.font = .systemFont(ofSize: 12, weight: .semibold)
+        percent.font = OrbTypography.emphasized(12)
         percent.textColor = .labelColor
         percent.lineBreakMode = .byTruncatingTail
         percent.translatesAutoresizingMaskIntoConstraints = false
         addSubview(percent)
 
         let reset = NSTextField(labelWithString: window.reset)
-        reset.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        reset.font = OrbTypography.regular(10)
         reset.textColor = .secondaryLabelColor
         reset.lineBreakMode = .byTruncatingTail
         reset.translatesAutoresizingMaskIntoConstraints = false
@@ -228,7 +258,7 @@ private final class AccountSummaryRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: showsUpdated ? 92 : 76))
 
         let emailLabel = NSTextField(labelWithString: email)
-        emailLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        emailLabel.font = OrbTypography.emphasized(12)
         emailLabel.textColor = .labelColor
         emailLabel.lineBreakMode = .byTruncatingMiddle
         emailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -236,7 +266,7 @@ private final class AccountSummaryRowView: NSView {
         addSubview(emailLabel)
 
         let statusLabel = NSTextField(labelWithString: status)
-        statusLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        statusLabel.font = OrbTypography.emphasized(10)
         statusLabel.textColor = .tertiaryLabelColor
         statusLabel.alignment = .right
         statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -290,7 +320,7 @@ private final class AccountSummaryRowView: NSView {
 
         if showsUpdated {
             let updatedLabel = NSTextField(labelWithString: updated)
-            updatedLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+            updatedLabel.font = OrbTypography.regular(10)
             updatedLabel.textColor = .tertiaryLabelColor
             updatedLabel.lineBreakMode = .byTruncatingTail
             updatedLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -327,12 +357,12 @@ private final class AuxiliaryDisclosureRowView: NSView {
         highlightView.isHidden = true
         addSubview(highlightView)
 
-        titleLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        titleLabel.font = OrbTypography.regular(11)
         titleLabel.textColor = .secondaryLabelColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
 
-        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valueLabel.font = OrbTypography.regular(11)
         valueLabel.textColor = .secondaryLabelColor
         valueLabel.alignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -386,7 +416,7 @@ private final class HeaderRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 26))
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
+        titleLabel.font = OrbTypography.emphasized(13)
         titleLabel.textColor = accent ? OrbTheme.accent : .labelColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -410,7 +440,7 @@ private final class HeaderRowView: NSView {
         addSubview(planBadge)
 
         let planLabel = NSTextField(labelWithString: plan)
-        planLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        planLabel.font = OrbTypography.emphasized(11)
         planLabel.textColor = OrbTheme.accent
         planLabel.lineBreakMode = .byTruncatingTail
         planLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -684,7 +714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard p.available else {
             button.toolTip = nil
             button.attributedTitle = NSAttributedString(string: "\(p.name) ⚠︎", attributes: [
-                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .font: OrbTypography.emphasized(12),
                 .foregroundColor: NSColor.secondaryLabelColor])
             return
         }
@@ -709,7 +739,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             string: p.menuBarValue(for: mode,
                                    percentMode: config.percentDisplayMode,
                                    quotaID: quotaID), attributes: [
-                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+                .font: OrbTypography.emphasized(12),
                 .foregroundColor: color])
     }
 
@@ -1078,6 +1108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.target = self
             item.representedObject = quota.id
             item.state = quota.id == selectedQuotaID ? .on : .off
+            applyMenuFont(to: item)
             submenu.addItem(item)
         }
         return submenu
@@ -1107,6 +1138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             )
             item.target = self
             item.state = effectiveMode == mode ? .on : .off
+            applyMenuFont(to: item)
             submenu.addItem(item)
         }
         return submenu
@@ -1129,6 +1161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         remaining.target = self
         remaining.state = config.percentDisplayMode == .remaining ? .on : .off
+        applyMenuFont(to: remaining)
 
         let used = NSMenuItem(
             title: Config.PercentDisplayMode.used.titleKey.l10n,
@@ -1137,6 +1170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         used.target = self
         used.state = config.percentDisplayMode == .used ? .on : .off
+        applyMenuFont(to: used)
 
         submenu.addItem(remaining)
         submenu.addItem(used)
@@ -1155,6 +1189,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         "\(title)\t\(value)"
     }
 
+    private func applyMenuFont(to item: NSMenuItem) {
+        item.attributedTitle = NSAttributedString(
+            string: item.title,
+            attributes: [.font: OrbTypography.regular(13)]
+        )
+    }
+
 
     private func currentMenuBarWindowLabel(provider: ProviderUsage? = nil) -> String {
         let quotaID = provider.flatMap { config.selectedQuotaID(for: $0.providerID) }
@@ -1169,14 +1210,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let bar = w.percent != nil ? displayPct.progressBar() : "··········"
         let line = NSMutableAttributedString()
         line.append(NSAttributedString(string: "\(w.label)\n", attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .medium)]))
+            .font: OrbTypography.emphasized(13)]))
         let barColor: NSColor = w.pct >= 90 ? .systemRed : w.pct >= 75 ? .systemOrange : .systemGreen
         let secondLineStart = line.length
         line.append(NSAttributedString(string: "\(bar)  ", attributes: [
-            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
+            .font: OrbTypography.regular(12),
             .foregroundColor: w.percent != nil ? barColor : NSColor.tertiaryLabelColor]))
         line.append(NSAttributedString(string: pctText, attributes: [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)]))
+            .font: OrbTypography.emphasized(12)]))
 
         // Match Codex's official display: time for 5-hour limits and a date for
         // longer limits, including when a 5-hour reset crosses midnight.
@@ -1195,7 +1236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         else if w.rolling { tail.append("status.rolling".l10n) }
         if !tail.isEmpty {
             line.append(NSAttributedString(string: "\t" + tail.joined(separator: " · "), attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+                .font: OrbTypography.regular(13),
                 .foregroundColor: NSColor.secondaryLabelColor]))
         }
 
@@ -1226,13 +1267,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func sub(_ s: String, dim: Bool = false) -> NSMenuItem {
         displayRow(NSAttributedString(string: s, attributes: [
-            .font: NSFont.systemFont(ofSize: 11),
+            .font: OrbTypography.regular(11),
             .foregroundColor: dim ? NSColor.tertiaryLabelColor : NSColor.labelColor]))
     }
 
     private func quotaHeaderItem(_ title: String, width: CGFloat) -> NSMenuItem {
         let attr = NSAttributedString(string: title, attributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .font: OrbTypography.emphasized(11),
             .foregroundColor: NSColor.secondaryLabelColor
         ])
         let item = displayRow(attr, leftPad: 14, topPad: 3)
