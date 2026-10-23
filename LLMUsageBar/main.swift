@@ -68,7 +68,7 @@ private final class MenuValueRowView: NSView {
         highlightView.isHidden = true
         addSubview(highlightView)
 
-        titleLabel.font = OrbTypography.emphasized(13)
+        titleLabel.font = OrbTypography.regular(13)
         titleLabel.textColor = .labelColor
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -192,7 +192,7 @@ private final class AccountGroupHeaderView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 22))
 
         let label = NSTextField(labelWithString: title)
-        label.font = OrbTypography.emphasized(10)
+        label.font = OrbTypography.regular(10)
         label.textColor = .tertiaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
@@ -212,13 +212,13 @@ private final class AccountMetricView: NSView {
         super.init(frame: .zero)
 
         let title = NSTextField(labelWithString: window.label)
-        title.font = OrbTypography.emphasized(10)
+        title.font = OrbTypography.regular(10)
         title.textColor = .tertiaryLabelColor
         title.translatesAutoresizingMaskIntoConstraints = false
         addSubview(title)
 
         let percent = NSTextField(labelWithString: window.percent)
-        percent.font = OrbTypography.emphasized(12)
+        percent.font = OrbTypography.regular(12)
         percent.textColor = .labelColor
         percent.lineBreakMode = .byTruncatingTail
         percent.translatesAutoresizingMaskIntoConstraints = false
@@ -258,7 +258,7 @@ private final class AccountSummaryRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: showsUpdated ? 92 : 76))
 
         let emailLabel = NSTextField(labelWithString: email)
-        emailLabel.font = OrbTypography.emphasized(12)
+        emailLabel.font = OrbTypography.regular(12)
         emailLabel.textColor = .labelColor
         emailLabel.lineBreakMode = .byTruncatingMiddle
         emailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -266,7 +266,7 @@ private final class AccountSummaryRowView: NSView {
         addSubview(emailLabel)
 
         let statusLabel = NSTextField(labelWithString: status)
-        statusLabel.font = OrbTypography.emphasized(10)
+        statusLabel.font = OrbTypography.regular(10)
         statusLabel.textColor = .tertiaryLabelColor
         statusLabel.alignment = .right
         statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -416,7 +416,7 @@ private final class HeaderRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 26))
 
         let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = OrbTypography.emphasized(13)
+        titleLabel.font = OrbTypography.regular(13)
         titleLabel.textColor = accent ? OrbTheme.accent : .labelColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -440,7 +440,7 @@ private final class HeaderRowView: NSView {
         addSubview(planBadge)
 
         let planLabel = NSTextField(labelWithString: plan)
-        planLabel.font = OrbTypography.emphasized(11)
+        planLabel.font = OrbTypography.regular(11)
         planLabel.textColor = OrbTheme.accent
         planLabel.lineBreakMode = .byTruncatingTail
         planLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -714,7 +714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard p.available else {
             button.toolTip = nil
             button.attributedTitle = NSAttributedString(string: "\(p.name) ⚠︎", attributes: [
-                .font: OrbTypography.emphasized(12),
+                .font: OrbTypography.regular(12),
                 .foregroundColor: NSColor.secondaryLabelColor])
             return
         }
@@ -739,7 +739,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             string: p.menuBarValue(for: mode,
                                    percentMode: config.percentDisplayMode,
                                    quotaID: quotaID), attributes: [
-                .font: OrbTypography.emphasized(12),
+                .font: OrbTypography.regular(12),
                 .foregroundColor: color])
     }
 
@@ -1210,14 +1210,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let bar = w.percent != nil ? displayPct.progressBar() : "··········"
         let line = NSMutableAttributedString()
         line.append(NSAttributedString(string: "\(w.label)\n", attributes: [
-            .font: OrbTypography.emphasized(13)]))
+            .font: OrbTypography.regular(13)]))
         let barColor: NSColor = w.pct >= 90 ? .systemRed : w.pct >= 75 ? .systemOrange : .systemGreen
         let secondLineStart = line.length
         line.append(NSAttributedString(string: "\(bar)  ", attributes: [
             .font: OrbTypography.regular(12),
             .foregroundColor: w.percent != nil ? barColor : NSColor.tertiaryLabelColor]))
         line.append(NSAttributedString(string: pctText, attributes: [
-            .font: OrbTypography.emphasized(12)]))
+            .font: OrbTypography.regular(12)]))
 
         // Match Codex's official display: time for 5-hour limits and a date for
         // longer limits, including when a 5-hour reset crosses midnight.
@@ -1273,7 +1273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func quotaHeaderItem(_ title: String, width: CGFloat) -> NSMenuItem {
         let attr = NSAttributedString(string: title, attributes: [
-            .font: OrbTypography.emphasized(11),
+            .font: OrbTypography.regular(11),
             .foregroundColor: NSColor.secondaryLabelColor
         ])
         let item = displayRow(attr, leftPad: 14, topPad: 3)
