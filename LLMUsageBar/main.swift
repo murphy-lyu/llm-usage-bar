@@ -509,7 +509,7 @@ private final class UsageWindowPickerView: NSView {
 
     func update(items: [(UsageWindowKind, NSAttributedString)], selectedKind: UsageWindowKind?) {
         self.selectedKind = selectedKind
-        rebuildRows(items: items, width: frame.width, leftPad: 14, topPad: 5)
+        rebuildRows(items: items, width: frame.width, leftPad: 14, topPad: 7)
         updateSelectionFrame()
     }
 
@@ -1209,7 +1209,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let pctText = w.percent != nil ? String(format: displayPercentFormat(), displayPct) : "—"
         let bar = w.percent != nil ? displayPct.progressBar() : "··········"
         let line = NSMutableAttributedString()
+        let titleParagraph = NSMutableParagraphStyle()
+        titleParagraph.paragraphSpacing = 4
         line.append(NSAttributedString(string: "\(w.label)\n", attributes: [
+            .paragraphStyle: titleParagraph,
             .font: OrbTypography.regular(13)]))
         let barColor: NSColor = w.pct >= 90 ? .systemRed : w.pct >= 75 ? .systemOrange : .systemGreen
         let secondLineStart = line.length
@@ -1285,7 +1288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                        quotaID: String,
                                        width: CGFloat,
                                        leftPad: CGFloat = 14,
-                                       topPad: CGFloat = 5) -> NSMenuItem {
+                                       topPad: CGFloat = 7) -> NSMenuItem {
         // Must match the field frame math in UsageWindowPickerView.rebuildRows.
         let fieldWidth = width - leftPad - 18
         let rows = windows.map { ($0.kind, usageWindowText($0, fieldWidth: fieldWidth)) }
